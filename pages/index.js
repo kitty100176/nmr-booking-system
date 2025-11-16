@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Clock, User, LogOut, Settings, X, Check, AlertCircle, UserCheck, UserX } from 'lucide-react';
+import { Calendar, Clock, User, LogOut, Settings, X, Check, AlertCircle, UserCheck, UserX, UserPlus, Trash2, Edit } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 export default function NMRBookingSystem() {
@@ -13,6 +13,17 @@ export default function NMRBookingSystem() {
   const [users, setUsers] = useState([]);
   const [showAdminPanel, setShowAdminPanel] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [showAddUserModal, setShowAddUserModal] = useState(false);
+  const [showEditUserModal, setShowEditUserModal] = useState(false);
+  const [editingUser, setEditingUser] = useState(null);
+  const [newUserForm, setNewUserForm] = useState({
+    username: '',
+    password: '',
+    display_name: '',
+    pi: '',
+    instruments: [],
+    is_admin: false
+  });
 
   useEffect(() => {
     if (isLoggedIn) {
@@ -82,7 +93,6 @@ export default function NMRBookingSystem() {
         return;
       }
 
-      // 檢查帳號是否啟用
       if (data.active === false) {
         alert('此帳號已被停用，請聯絡管理員');
         return;
@@ -240,6 +250,131 @@ export default function NMRBookingSystem() {
     }
   };
 
+  const handleAddUser = async () => {
+    if (!newUserForm.username || !newUserForm.password || !newUserForm.display_name || !newUserForm.pi) {
+      alert('請填寫所有必填欄位');
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('users')
+        .insert([{
+          username: newUserForm.username,
+          password: newUserForm.password,
+          display_name: newUserForm.display_name,
+          pi: newUserForm.pi,
+          instruments: newUserForm.instruments,
+          is_admin: newUserForm.is_admin,
+          active: true
+        }]);
+
+      if (error) {
+        if (error.code === '23505') {
+          alert('此帳號已存在');
+        } else {
+          throw error;
+        }
+        return;
+      }
+
+      alert('用戶新增成功！');
+      setShowAddUserModal(false);
+      setNewUserForm({
+        username: '',
+        password: '',
+        display_name: '',
+        pi: '',
+        instruments: [],
+        is_admin: false
+      });
+      await loadUsers();
+    } catch (error) {
+      console.error('新增用戶失敗:', error);
+      alert('新增失敗，請稍後再試');
+    }
+  };
+
+  const handleEditUser = async () => {
+    if (!editingUser) return;
+
+    try {
+      const updateData = {
+        display_name: editingUser.display_name,
+        pi: editingUser.pi,
+        is_admin: editingUser.is_admin
+      };
+
+      // 只有在密碼有填寫時才更新
+      if (editingUser.password) {
+        updateData.password = editingUser.password;
+      }
+
+      const { error } = await supabase
+        .from('users')
+        .update(updateData)
+        .eq('id', editingUser.id);
+
+      if (error) throw error;
+
+      alert('用戶資料已更新！');
+      setShowEditUserModal(false);
+      setEditingUser(null);
+      await loadUsers();
+    } catch (error) {
+      console.error('更新用戶失敗:', error);
+      alert('更新失敗，請稍後再試');
+    }
+  };
+
+  const handleDeleteUser = async (userId, username) => {
+    if (username === 'admin') {
+      alert('不能刪除管理員帳號');
+      return;
+    }
+
+    if (!confirm(`確定要刪除用戶 "${username}" 嗎？此操作無法復原！`)) {
+      return;
+    }
+
+    try {
+      // 先刪除該用戶的所有預約
+      await supabase
+        .from('bookings')
+        .delete()
+        .eq('username', username);
+
+      // 再刪除用戶
+      const { error } = await supabase
+        .from('users')
+        .delete()
+        .eq('id', userId);
+
+      if (error) throw error;
+
+      alert('用戶已刪除');
+      await loadUsers();
+    } catch (error) {
+      console.error('刪除用戶失敗:', error);
+      alert('刪除失敗，請稍後再試');
+    }
+  };
+
+  const toggleNewUserInstrument = (instrument) => {
+    const current = newUserForm.instruments;
+    if (current.includes(instrument)) {
+      setNewUserForm({
+        ...newUserForm,
+        instruments: current.filter(i => i !== instrument)
+      });
+    } else {
+      setNewUserForm({
+        ...newUserForm,
+        instruments: [...current, instrument]
+      });
+    }
+  };
+
   const getBookingForSlot = (timeSlot) => {
     return bookings.find(b => b.time_slot === timeSlot);
   };
@@ -371,26 +506,234 @@ export default function NMRBookingSystem() {
     );
   }
 
+  // 新增用戶彈窗
+  if (showAddUserModal) {
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+        <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-2xl font-bold text-gray-800">新增用戶</h2>
+            <button onClick={() => setShowAddUserModal(false)} className="text-gray-500 hover:text-gray-700">
+              <X className="w-6 h-6" />
+            </button>
+          </div>
+
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">帳號 *</label>
+              <input
+                type="text"
+                value={newUserForm.username}
+                onChange={(e) => setNewUserForm({...newUserForm, username: e.target.value})}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                placeholder="例如：chen123"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">密碼 *</label>
+              <input
+                type="text"
+                value={newUserForm.password}
+                onChange={(e) => setNewUserForm({...newUserForm, password: e.target.value})}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                placeholder="設定密碼"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">顯示名稱 *</label>
+              <input
+                type="text"
+                value={newUserForm.display_name}
+                onChange={(e) => setNewUserForm({...newUserForm, display_name: e.target.value})}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                placeholder="例如：陳小明"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">教授姓氏 *</label>
+              <input
+                type="text"
+                value={newUserForm.pi}
+                onChange={(e) => setNewUserForm({...newUserForm, pi: e.target.value})}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                placeholder="例如：王"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">儀器權限</label>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => toggleNewUserInstrument('50')}
+                  className={`px-4 py-2 rounded-lg font-medium transition ${
+                    newUserForm.instruments.includes('50')
+                      ? 'bg-green-500 text-white'
+                      : 'bg-gray-200 text-gray-600'
+                  }`}
+                >
+                  50 MHz {newUserForm.instruments.includes('50') ? '✓' : ''}
+                </button>
+                <button
+                  onClick={() => toggleNewUserInstrument('500')}
+                  className={`px-4 py-2 rounded-lg font-medium transition ${
+                    newUserForm.instruments.includes('500')
+                      ? 'bg-green-500 text-white'
+                      : 'bg-gray-200 text-gray-600'
+                  }`}
+                >
+                  500 MHz {newUserForm.instruments.includes('500') ? '✓' : ''}
+                </button>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="is_admin"
+                checked={newUserForm.is_admin}
+                onChange={(e) => setNewUserForm({...newUserForm, is_admin: e.target.checked})}
+                className="w-4 h-4 text-indigo-600 rounded"
+              />
+              <label htmlFor="is_admin" className="text-sm text-gray-700">設為管理員</label>
+            </div>
+          </div>
+
+          <div className="flex gap-3 mt-6">
+            <button
+              onClick={() => setShowAddUserModal(false)}
+              className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition"
+            >
+              取消
+            </button>
+            <button
+              onClick={handleAddUser}
+              className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition"
+            >
+              新增
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // 編輯用戶彈窗
+  if (showEditUserModal && editingUser) {
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+        <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-2xl font-bold text-gray-800">編輯用戶</h2>
+            <button onClick={() => { setShowEditUserModal(false); setEditingUser(null); }} className="text-gray-500 hover:text-gray-700">
+              <X className="w-6 h-6" />
+            </button>
+          </div>
+
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">帳號</label>
+              <input
+                type="text"
+                value={editingUser.username}
+                disabled
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-500"
+              />
+              <p className="text-xs text-gray-500 mt-1">帳號無法修改</p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">新密碼（留空表示不修改）</label>
+              <input
+                type="text"
+                value={editingUser.password || ''}
+                onChange={(e) => setEditingUser({...editingUser, password: e.target.value})}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                placeholder="輸入新密碼或留空"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">顯示名稱 *</label>
+              <input
+                type="text"
+                value={editingUser.display_name}
+                onChange={(e) => setEditingUser({...editingUser, display_name: e.target.value})}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">教授姓氏 *</label>
+              <input
+                type="text"
+                value={editingUser.pi}
+                onChange={(e) => setEditingUser({...editingUser, pi: e.target.value})}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+              />
+            </div>
+
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="edit_is_admin"
+                checked={editingUser.is_admin}
+                onChange={(e) => setEditingUser({...editingUser, is_admin: e.target.checked})}
+                className="w-4 h-4 text-indigo-600 rounded"
+              />
+              <label htmlFor="edit_is_admin" className="text-sm text-gray-700">設為管理員</label>
+            </div>
+          </div>
+
+          <div className="flex gap-3 mt-6">
+            <button
+              onClick={() => { setShowEditUserModal(false); setEditingUser(null); }}
+              className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition"
+            >
+              取消
+            </button>
+            <button
+              onClick={handleEditUser}
+              className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition"
+            >
+              儲存
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // 管理員面板
   if (showAdminPanel && currentUser?.is_admin) {
     return (
       <div className="min-h-screen bg-gray-50">
         <div className="bg-white shadow-sm border-b">
           <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
-            <h1 className="text-2xl font-bold text-gray-800">權限管理</h1>
-            <button
-              onClick={() => setShowAdminPanel(false)}
-              className="flex items-center gap-2 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition"
-            >
-              <X className="w-4 h-4" />
-              返回
-            </button>
+            <h1 className="text-2xl font-bold text-gray-800">用戶管理</h1>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowAddUserModal(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition"
+              >
+                <UserPlus className="w-4 h-4" />
+                新增用戶
+              </button>
+              <button
+                onClick={() => setShowAdminPanel(false)}
+                className="flex items-center gap-2 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition"
+              >
+                <X className="w-4 h-4" />
+                返回
+              </button>
+            </div>
           </div>
         </div>
         
         <div className="max-w-7xl mx-auto p-4">
           <div className="bg-white rounded-lg shadow-sm p-6">
-            <h2 className="text-xl font-bold mb-4">用戶管理</h2>
             <div className="space-y-4">
               {users.map(user => (
                 <div key={user.id} className={`border rounded-lg p-4 ${!user.active ? 'bg-gray-50 opacity-75' : ''}`}>
@@ -404,29 +747,48 @@ export default function NMRBookingSystem() {
                         {user.active !== false && (
                           <span className="px-2 py-1 bg-green-100 text-green-700 text-xs rounded-full">已啟用</span>
                         )}
+                        {user.is_admin && (
+                          <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-full">管理員</span>
+                        )}
                       </div>
                       <p className="text-sm text-gray-600">{user.username} - {user.pi}教授實驗室</p>
                     </div>
-                    <button
-                      onClick={() => toggleUserActive(user.id, user.active !== false)}
-                      className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition ${
-                        user.active !== false
-                          ? 'bg-red-100 text-red-700 hover:bg-red-200'
-                          : 'bg-green-100 text-green-700 hover:bg-green-200'
-                      }`}
-                    >
-                      {user.active !== false ? (
-                        <>
-                          <UserX className="w-4 h-4" />
-                          停用帳號
-                        </>
-                      ) : (
-                        <>
-                          <UserCheck className="w-4 h-4" />
-                          啟用帳號
-                        </>
-                      )}
-                    </button>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => { setEditingUser({...user, password: ''}); setShowEditUserModal(true); }}
+                        className="flex items-center gap-1 px-3 py-1 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition text-sm"
+                      >
+                        <Edit className="w-3 h-3" />
+                        編輯
+                      </button>
+                      <button
+                        onClick={() => toggleUserActive(user.id, user.active !== false)}
+                        className={`flex items-center gap-1 px-3 py-1 rounded-lg font-medium transition text-sm ${
+                          user.active !== false
+                            ? 'bg-orange-100 text-orange-700 hover:bg-orange-200'
+                            : 'bg-green-100 text-green-700 hover:bg-green-200'
+                        }`}
+                      >
+                        {user.active !== false ? (
+                          <>
+                            <UserX className="w-3 h-3" />
+                            停用
+                          </>
+                        ) : (
+                          <>
+                            <UserCheck className="w-3 h-3" />
+                            啟用
+                          </>
+                        )}
+                      </button>
+                      <button
+                        onClick={() => handleDeleteUser(user.id, user.username)}
+                        className="flex items-center gap-1 px-3 py-1 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition text-sm"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                        刪除
+                      </button>
+                    </div>
                   </div>
                   <div className="flex gap-3">
                     <button
@@ -491,7 +853,7 @@ export default function NMRBookingSystem() {
                   className="flex items-center gap-2 px-3 py-2 bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 transition text-sm"
                 >
                   <Settings className="w-4 h-4" />
-                  權限管理
+                  用戶管理
                 </button>
               )}
               
