@@ -455,6 +455,43 @@ export default function NMRBookingSystem() {
     }
   };
 
+  const exportToCSV = () => {
+    if (historyBookings.length === 0) {
+      alert('沒有資料可以匯出');
+      return;
+    }
+
+    // 建立 CSV 標題
+    const headers = ['預約時間', '用戶名稱', 'Lab', '儀器 (MHz)', '預約日期', '時段'];
+    
+    // 建立 CSV 內容
+    const csvContent = [
+      headers.join(','),
+      ...historyBookings.map(booking => [
+        `"${new Date(booking.booked_at).toLocaleString('zh-TW')}"`,
+        `"${booking.display_name}"`,
+        `"${booking.pi} Lab"`,
+        booking.instrument,
+        booking.date,
+        `"${booking.time_slot}"`
+      ].join(','))
+    ].join('\n');
+
+    // 加入 BOM 以支援中文
+    const BOM = '\uFEFF';
+    const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
+    
+    // 建立下載連結
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `預約記錄_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const toggleNewUserInstrument = (instrument) => {
     const current = newUserForm.instruments;
     if (current.includes(instrument)) {
@@ -652,13 +689,13 @@ export default function NMRBookingSystem() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">教授姓氏 *</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Lab 名稱 *</label>
               <input
                 type="text"
                 value={newUserForm.pi}
                 onChange={(e) => setNewUserForm({...newUserForm, pi: e.target.value})}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-                placeholder="例如：王"
+                placeholder="例如：000"
               />
             </div>
 
@@ -765,7 +802,7 @@ export default function NMRBookingSystem() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">教授姓氏 *</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Lab 名稱 *</label>
               <input
                 type="text"
                 value={editingUser.pi}
@@ -871,13 +908,22 @@ export default function NMRBookingSystem() {
         <div className="bg-white shadow-sm border-b">
           <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
             <h1 className="text-2xl font-bold text-gray-800">歷史預約記錄</h1>
-            <button
-              onClick={() => setShowHistoryPanel(false)}
-              className="flex items-center gap-2 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition"
-            >
-              <X className="w-4 h-4" />
-              返回
-            </button>
+            <div className="flex gap-3">
+              <button
+                onClick={exportToCSV}
+                className="flex items-center gap-2 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition"
+              >
+                <Check className="w-4 h-4" />
+                匯出 CSV
+              </button>
+              <button
+                onClick={() => setShowHistoryPanel(false)}
+                className="flex items-center gap-2 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition"
+              >
+                <X className="w-4 h-4" />
+                返回
+              </button>
+            </div>
           </div>
         </div>
         
@@ -977,7 +1023,7 @@ export default function NMRBookingSystem() {
                           <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-full">管理員</span>
                         )}
                       </div>
-                      <p className="text-sm text-gray-600">{user.username} - {user.pi}教授實驗室</p>
+                      <p className="text-sm text-gray-600">{user.username} - {user.pi} Lab</p>
                     </div>
                     <div className="flex gap-2">
                       <button
