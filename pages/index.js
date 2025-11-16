@@ -67,12 +67,15 @@ export default function NMRBookingSystem() {
         .eq('id', 1)
         .single();
       
-      if (error && error.code !== 'PGRST116') throw error;
+      if (error && error.code !== 'PGRST116') {
+        console.error('載入設定錯誤:', error);
+      }
+      
       if (data) {
         setSystemSettings(data);
       } else {
         // 如果沒有設定，使用預設值
-        setSystemSettings({
+        const defaultSettings = {
           rule1: '請提前預約所需時段，系統開放預約未來時段',
           rule2: '不可預約或取消已過去的時間',
           rule3: '預約時間粒度為30分鐘，開放時段為9:00-21:00',
@@ -80,10 +83,22 @@ export default function NMRBookingSystem() {
           rule5: '請準時使用儀器，並保持儀器清潔',
           rule6: '使用前請確認已通過該儀器操作訓練',
           rule7: '如有問題請聯絡管理員'
-        });
+        };
+        setSystemSettings(defaultSettings);
       }
     } catch (error) {
       console.error('載入系統設定失敗:', error);
+      // 發生錯誤時也使用預設值
+      const defaultSettings = {
+        rule1: '請提前預約所需時段，系統開放預約未來時段',
+        rule2: '不可預約或取消已過去的時間',
+        rule3: '預約時間粒度為30分鐘，開放時段為9:00-21:00',
+        rule4: '另有21:00-09:00夜間時段可預約',
+        rule5: '請準時使用儀器，並保持儀器清潔',
+        rule6: '使用前請確認已通過該儀器操作訓練',
+        rule7: '如有問題請聯絡管理員'
+      };
+      setSystemSettings(defaultSettings);
     }
   };
 
@@ -513,6 +528,18 @@ export default function NMRBookingSystem() {
 
   // 登入畫面
   if (!isLoggedIn) {
+    // 如果還沒載入設定，先不顯示（避免閃爍）
+    if (!systemSettings) {
+      return (
+        <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
+          <div className="text-center">
+            <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+            <p className="mt-4 text-gray-600">載入中...</p>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
         <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full overflow-hidden">
@@ -569,38 +596,18 @@ export default function NMRBookingSystem() {
             <div className="md:w-1/2 bg-indigo-600 text-white p-8">
               <h2 className="text-2xl font-bold mb-6">使用規則</h2>
               <div className="space-y-4">
-                {systemSettings && (
-                  <>
-                    <div className="flex items-start gap-3">
+                {[1, 2, 3, 4, 5, 6, 7].map(num => {
+                  const ruleText = systemSettings[`rule${num}`];
+                  // 只顯示有內容的規則
+                  if (!ruleText || ruleText.trim() === '') return null;
+                  
+                  return (
+                    <div key={num} className="flex items-start gap-3">
                       <Check className="w-5 h-5 mt-1 flex-shrink-0" />
-                      <p>{systemSettings.rule1}</p>
+                      <p className="whitespace-pre-wrap">{ruleText}</p>
                     </div>
-                    <div className="flex items-start gap-3">
-                      <Check className="w-5 h-5 mt-1 flex-shrink-0" />
-                      <p>{systemSettings.rule2}</p>
-                    </div>
-                    <div className="flex items-start gap-3">
-                      <Check className="w-5 h-5 mt-1 flex-shrink-0" />
-                      <p>{systemSettings.rule3}</p>
-                    </div>
-                    <div className="flex items-start gap-3">
-                      <Check className="w-5 h-5 mt-1 flex-shrink-0" />
-                      <p>{systemSettings.rule4}</p>
-                    </div>
-                    <div className="flex items-start gap-3">
-                      <Check className="w-5 h-5 mt-1 flex-shrink-0" />
-                      <p>{systemSettings.rule5}</p>
-                    </div>
-                    <div className="flex items-start gap-3">
-                      <Check className="w-5 h-5 mt-1 flex-shrink-0" />
-                      <p>{systemSettings.rule6}</p>
-                    </div>
-                    <div className="flex items-start gap-3">
-                      <Check className="w-5 h-5 mt-1 flex-shrink-0" />
-                      <p>{systemSettings.rule7}</p>
-                    </div>
-                  </>
-                )}
+                  );
+                })}
               </div>
             </div>
           </div>
