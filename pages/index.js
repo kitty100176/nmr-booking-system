@@ -896,29 +896,32 @@ export default function NMRBookingSystem() {
               )}
             </div>
 
-            {/* 右側：即時預覽 */}
-            <div className="bg-white rounded-lg shadow-sm p-6 lg:sticky lg:top-4 lg:self-start">
-              <h2 className="text-xl font-bold mb-2">即時預覽</h2>
-              <p className="text-sm text-gray-600 mb-6">這是用戶在登入頁面看到的樣子</p>
-              
-              <div className="bg-indigo-600 text-white p-6 rounded-lg">
-                <h3 className="text-xl font-bold mb-4">使用規則</h3>
-                <div className="space-y-3">
-                  {systemSettings && [1, 2, 3, 4, 5, 6, 7].map(num => (
-                    systemSettings[`rule${num}`] && (
-                      <div key={num} className="flex items-start gap-3">
-                        <Check className="w-5 h-5 mt-0.5 flex-shrink-0" />
-                        <p className="text-sm whitespace-pre-wrap">{systemSettings[`rule${num}`]}</p>
-                      </div>
-                    )
-                  ))}
+            {/* 右側：即時預覽（固定位置） */}
+            <div className="lg:sticky lg:top-20 lg:self-start">
+              <div className="bg-white rounded-lg shadow-sm p-6">
+                <h2 className="text-xl font-bold mb-2">即時預覽</h2>
+                <p className="text-sm text-gray-600 mb-4">這是用戶在登入頁面看到的樣子</p>
+                
+                {/* 預覽框 - 可滾動 */}
+                <div className="bg-indigo-600 text-white p-6 rounded-lg max-h-[600px] overflow-y-auto">
+                  <h3 className="text-xl font-bold mb-4 sticky top-0 bg-indigo-600 pb-2">使用規則</h3>
+                  <div className="space-y-3">
+                    {systemSettings && [1, 2, 3, 4, 5, 6, 7].map(num => (
+                      systemSettings[`rule${num}`] && (
+                        <div key={num} className="flex items-start gap-3">
+                          <Check className="w-5 h-5 mt-0.5 flex-shrink-0" />
+                          <p className="text-sm whitespace-pre-wrap">{systemSettings[`rule${num}`]}</p>
+                        </div>
+                      )
+                    ))}
+                  </div>
                 </div>
-              </div>
 
-              <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                <p className="text-xs text-blue-800">
-                  💡 提示：可以輸入多行文字，按 Enter 換行
-                </p>
+                <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <p className="text-xs text-blue-800">
+                    💡 提示：預覽區域可以上下滾動查看所有內容
+                  </p>
+                </div>
               </div>
             </div>
           </div>
