@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Clock, User, LogOut, Settings, X, Check, AlertCircle } from 'lucide-react';
+import { Calendar, Clock, User, LogOut, Settings, X, Check, AlertCircle, UserCheck, UserX } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 export default function NMRBookingSystem() {
@@ -79,6 +79,12 @@ export default function NMRBookingSystem() {
 
       if (error || !data) {
         alert('帳號或密碼錯誤');
+        return;
+      }
+
+      // 檢查帳號是否啟用
+      if (data.active === false) {
+        alert('此帳號已被停用，請聯絡管理員');
         return;
       }
 
@@ -214,6 +220,22 @@ export default function NMRBookingSystem() {
       await loadUsers();
     } catch (error) {
       console.error('更新權限失敗:', error);
+      alert('更新失敗，請稍後再試');
+    }
+  };
+
+  const toggleUserActive = async (userId, currentActive) => {
+    try {
+      const { error } = await supabase
+        .from('users')
+        .update({ active: !currentActive })
+        .eq('id', userId);
+
+      if (error) throw error;
+      await loadUsers();
+      alert(currentActive ? '帳號已停用' : '帳號已啟用');
+    } catch (error) {
+      console.error('更新狀態失敗:', error);
       alert('更新失敗，請稍後再試');
     }
   };
@@ -368,33 +390,67 @@ export default function NMRBookingSystem() {
         
         <div className="max-w-7xl mx-auto p-4">
           <div className="bg-white rounded-lg shadow-sm p-6">
-            <h2 className="text-xl font-bold mb-4">用戶儀器權限設定</h2>
+            <h2 className="text-xl font-bold mb-4">用戶管理</h2>
             <div className="space-y-4">
               {users.map(user => (
-                <div key={user.id} className="border rounded-lg p-4">
+                <div key={user.id} className={`border rounded-lg p-4 ${!user.active ? 'bg-gray-50 opacity-75' : ''}`}>
                   <div className="flex justify-between items-start mb-3">
-                    <div>
-                      <p className="font-semibold text-lg">{user.display_name}</p>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <p className="font-semibold text-lg">{user.display_name}</p>
+                        {user.active === false && (
+                          <span className="px-2 py-1 bg-red-100 text-red-700 text-xs rounded-full">已停用</span>
+                        )}
+                        {user.active !== false && (
+                          <span className="px-2 py-1 bg-green-100 text-green-700 text-xs rounded-full">已啟用</span>
+                        )}
+                      </div>
                       <p className="text-sm text-gray-600">{user.username} - {user.pi}教授實驗室</p>
                     </div>
+                    <button
+                      onClick={() => toggleUserActive(user.id, user.active !== false)}
+                      className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition ${
+                        user.active !== false
+                          ? 'bg-red-100 text-red-700 hover:bg-red-200'
+                          : 'bg-green-100 text-green-700 hover:bg-green-200'
+                      }`}
+                    >
+                      {user.active !== false ? (
+                        <>
+                          <UserX className="w-4 h-4" />
+                          停用帳號
+                        </>
+                      ) : (
+                        <>
+                          <UserCheck className="w-4 h-4" />
+                          啟用帳號
+                        </>
+                      )}
+                    </button>
                   </div>
                   <div className="flex gap-3">
                     <button
                       onClick={() => toggleUserInstrument(user.id, '50')}
+                      disabled={user.active === false}
                       className={`px-4 py-2 rounded-lg font-medium transition ${
-                        user.instruments?.includes('50')
-                          ? 'bg-green-500 text-white'
-                          : 'bg-gray-200 text-gray-600'
+                        user.active === false
+                          ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                          : user.instruments?.includes('50')
+                          ? 'bg-green-500 text-white hover:bg-green-600'
+                          : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
                       }`}
                     >
                       50 MHz {user.instruments?.includes('50') ? '✓' : ''}
                     </button>
                     <button
                       onClick={() => toggleUserInstrument(user.id, '500')}
+                      disabled={user.active === false}
                       className={`px-4 py-2 rounded-lg font-medium transition ${
-                        user.instruments?.includes('500')
-                          ? 'bg-green-500 text-white'
-                          : 'bg-gray-200 text-gray-600'
+                        user.active === false
+                          ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                          : user.instruments?.includes('500')
+                          ? 'bg-green-500 text-white hover:bg-green-600'
+                          : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
                       }`}
                     >
                       500 MHz {user.instruments?.includes('500') ? '✓' : ''}
