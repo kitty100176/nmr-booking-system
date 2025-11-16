@@ -30,8 +30,11 @@ export default function NMRBookingSystem() {
   });
 
   useEffect(() => {
+    loadSystemSettings();
+  }, []);
+
+  useEffect(() => {
     if (isLoggedIn) {
-      loadSystemSettings();
       loadBookings();
       if (currentUser?.is_admin) {
         loadUsers();
@@ -528,18 +531,6 @@ export default function NMRBookingSystem() {
 
   // 登入畫面
   if (!isLoggedIn) {
-    // 如果還沒載入設定，先不顯示（避免閃爍）
-    if (!systemSettings) {
-      return (
-        <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
-          <div className="text-center">
-            <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
-            <p className="mt-4 text-gray-600">載入中...</p>
-          </div>
-        </div>
-      );
-    }
-
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
         <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full overflow-hidden">
@@ -593,21 +584,55 @@ export default function NMRBookingSystem() {
               </div>
             </div>
             
-            <div className="md:w-1/2 bg-indigo-600 text-white p-8">
-              <h2 className="text-2xl font-bold mb-6">使用規則</h2>
-              <div className="space-y-4">
-                {[1, 2, 3, 4, 5, 6, 7].map(num => {
-                  const ruleText = systemSettings[`rule${num}`];
-                  // 只顯示有內容的規則
-                  if (!ruleText || ruleText.trim() === '') return null;
-                  
-                  return (
-                    <div key={num} className="flex items-start gap-3">
+            <div className="md:w-1/2 bg-indigo-600 text-white p-8 flex flex-col max-h-screen">
+              <h2 className="text-2xl font-bold mb-6 flex-shrink-0">使用規則</h2>
+              <div className="space-y-4 overflow-y-auto flex-1 pr-2">
+                {systemSettings ? (
+                  [1, 2, 3, 4, 5, 6, 7].map(num => {
+                    const ruleText = systemSettings[`rule${num}`];
+                    // 只顯示有內容的規則
+                    if (!ruleText || ruleText.trim() === '') return null;
+                    
+                    return (
+                      <div key={num} className="flex items-start gap-3">
+                        <Check className="w-5 h-5 mt-1 flex-shrink-0" />
+                        <p className="whitespace-pre-wrap">{ruleText}</p>
+                      </div>
+                    );
+                  })
+                ) : (
+                  // 載入中或載入失敗時顯示預設規則
+                  <>
+                    <div className="flex items-start gap-3">
                       <Check className="w-5 h-5 mt-1 flex-shrink-0" />
-                      <p className="whitespace-pre-wrap">{ruleText}</p>
+                      <p>請提前預約所需時段，系統開放預約未來時段</p>
                     </div>
-                  );
-                })}
+                    <div className="flex items-start gap-3">
+                      <Check className="w-5 h-5 mt-1 flex-shrink-0" />
+                      <p>不可預約或取消已過去的時間</p>
+                    </div>
+                    <div className="flex items-start gap-3">
+                      <Check className="w-5 h-5 mt-1 flex-shrink-0" />
+                      <p>預約時間粒度為30分鐘，開放時段為9:00-21:00</p>
+                    </div>
+                    <div className="flex items-start gap-3">
+                      <Check className="w-5 h-5 mt-1 flex-shrink-0" />
+                      <p>另有21:00-09:00夜間時段可預約</p>
+                    </div>
+                    <div className="flex items-start gap-3">
+                      <Check className="w-5 h-5 mt-1 flex-shrink-0" />
+                      <p>請準時使用儀器，並保持儀器清潔</p>
+                    </div>
+                    <div className="flex items-start gap-3">
+                      <Check className="w-5 h-5 mt-1 flex-shrink-0" />
+                      <p>使用前請確認已通過該儀器操作訓練</p>
+                    </div>
+                    <div className="flex items-start gap-3">
+                      <Check className="w-5 h-5 mt-1 flex-shrink-0" />
+                      <p>如有問題請聯絡管理員</p>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           </div>
