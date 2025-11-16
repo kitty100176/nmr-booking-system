@@ -12,10 +12,14 @@ export default function NMRBookingSystem() {
   const [bookings, setBookings] = useState([]);
   const [users, setUsers] = useState([]);
   const [showAdminPanel, setShowAdminPanel] = useState(false);
+  const [showHistoryPanel, setShowHistoryPanel] = useState(false);
+  const [showSettingsPanel, setShowSettingsPanel] = useState(false);
   const [loading, setLoading] = useState(false);
   const [showAddUserModal, setShowAddUserModal] = useState(false);
   const [showEditUserModal, setShowEditUserModal] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
+  const [historyBookings, setHistoryBookings] = useState([]);
+  const [systemSettings, setSystemSettings] = useState(null);
   const [newUserForm, setNewUserForm] = useState({
     username: '',
     password: '',
@@ -27,6 +31,7 @@ export default function NMRBookingSystem() {
 
   useEffect(() => {
     if (isLoggedIn) {
+      loadSystemSettings();
       loadBookings();
       if (currentUser?.is_admin) {
         loadUsers();
@@ -51,6 +56,49 @@ export default function NMRBookingSystem() {
       setUsers(data || []);
     } catch (error) {
       console.error('載入用戶失敗:', error);
+    }
+  };
+
+  const loadSystemSettings = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('system_settings')
+        .select('*')
+        .eq('id', 1)
+        .single();
+      
+      if (error && error.code !== 'PGRST116') throw error;
+      if (data) {
+        setSystemSettings(data);
+      } else {
+        // 如果沒有設定，使用預設值
+        setSystemSettings({
+          rule1: '請提前預約所需時段，系統開放預約未來時段',
+          rule2: '不可預約或取消已過去的時間',
+          rule3: '預約時間粒度為30分鐘，開放時段為9:00-21:00',
+          rule4: '另有21:00-09:00夜間時段可預約',
+          rule5: '請準時使用儀器，並保持儀器清潔',
+          rule6: '使用前請確認已通過該儀器操作訓練',
+          rule7: '如有問題請聯絡管理員'
+        });
+      }
+    } catch (error) {
+      console.error('載入系統設定失敗:', error);
+    }
+  };
+
+  const loadHistoryBookings = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('bookings')
+        .select('*')
+        .order('booked_at', { ascending: false })
+        .limit(100);
+      
+      if (error) throw error;
+      setHistoryBookings(data || []);
+    } catch (error) {
+      console.error('載入歷史記錄失敗:', error);
     }
   };
 
@@ -113,6 +161,8 @@ export default function NMRBookingSystem() {
     setSelectedInstrument('');
     setSelectedDate('');
     setShowAdminPanel(false);
+    setShowHistoryPanel(false);
+    setShowSettingsPanel(false);
     setBookings([]);
   };
 
@@ -360,6 +410,51 @@ export default function NMRBookingSystem() {
     }
   };
 
+  const handleSaveSettings = async () => {
+    if (!systemSettings) return;
+
+    try {
+      const { data: existing } = await supabase
+        .from('system_settings')
+        .select('id')
+        .eq('id', 1)
+        .single();
+
+      if (existing) {
+        // 更新
+        const { error } = await supabase
+          .from('system_settings')
+          .update({
+            rule1: systemSettings.rule1,
+            rule2: systemSettings.rule2,
+            rule3: systemSettings.rule3,
+            rule4: systemSettings.rule4,
+            rule5: systemSettings.rule5,
+            rule6: systemSettings.rule6,
+            rule7: systemSettings.rule7
+          })
+          .eq('id', 1);
+
+        if (error) throw error;
+      } else {
+        // 新增
+        const { error } = await supabase
+          .from('system_settings')
+          .insert([{
+            id: 1,
+            ...systemSettings
+          }]);
+
+        if (error) throw error;
+      }
+
+      alert('設定已儲存！');
+    } catch (error) {
+      console.error('儲存設定失敗:', error);
+      alert('儲存失敗，請稍後再試');
+    }
+  };
+
   const toggleNewUserInstrument = (instrument) => {
     const current = newUserForm.instruments;
     if (current.includes(instrument)) {
@@ -437,34 +532,38 @@ export default function NMRBookingSystem() {
             <div className="md:w-1/2 bg-indigo-600 text-white p-8">
               <h2 className="text-2xl font-bold mb-6">使用規則</h2>
               <div className="space-y-4">
-                <div className="flex items-start gap-3">
-                  <Check className="w-5 h-5 mt-1 flex-shrink-0" />
-                  <p>請提前預約所需時段，系統開放預約未來時段</p>
-                </div>
-                <div className="flex items-start gap-3">
-                  <Check className="w-5 h-5 mt-1 flex-shrink-0" />
-                  <p>不可預約或取消已過去的時間</p>
-                </div>
-                <div className="flex items-start gap-3">
-                  <Check className="w-5 h-5 mt-1 flex-shrink-0" />
-                  <p>預約時間粒度為30分鐘，開放時段為9:00-21:00</p>
-                </div>
-                <div className="flex items-start gap-3">
-                  <Check className="w-5 h-5 mt-1 flex-shrink-0" />
-                  <p>另有21:00-09:00夜間時段可預約</p>
-                </div>
-                <div className="flex items-start gap-3">
-                  <Check className="w-5 h-5 mt-1 flex-shrink-0" />
-                  <p>請準時使用儀器，並保持儀器清潔</p>
-                </div>
-                <div className="flex items-start gap-3">
-                  <Check className="w-5 h-5 mt-1 flex-shrink-0" />
-                  <p>使用前請確認已通過該儀器操作訓練</p>
-                </div>
-                <div className="flex items-start gap-3">
-                  <Check className="w-5 h-5 mt-1 flex-shrink-0" />
-                  <p>如有問題請聯絡管理員</p>
-                </div>
+                {systemSettings && (
+                  <>
+                    <div className="flex items-start gap-3">
+                      <Check className="w-5 h-5 mt-1 flex-shrink-0" />
+                      <p>{systemSettings.rule1}</p>
+                    </div>
+                    <div className="flex items-start gap-3">
+                      <Check className="w-5 h-5 mt-1 flex-shrink-0" />
+                      <p>{systemSettings.rule2}</p>
+                    </div>
+                    <div className="flex items-start gap-3">
+                      <Check className="w-5 h-5 mt-1 flex-shrink-0" />
+                      <p>{systemSettings.rule3}</p>
+                    </div>
+                    <div className="flex items-start gap-3">
+                      <Check className="w-5 h-5 mt-1 flex-shrink-0" />
+                      <p>{systemSettings.rule4}</p>
+                    </div>
+                    <div className="flex items-start gap-3">
+                      <Check className="w-5 h-5 mt-1 flex-shrink-0" />
+                      <p>{systemSettings.rule5}</p>
+                    </div>
+                    <div className="flex items-start gap-3">
+                      <Check className="w-5 h-5 mt-1 flex-shrink-0" />
+                      <p>{systemSettings.rule6}</p>
+                    </div>
+                    <div className="flex items-start gap-3">
+                      <Check className="w-5 h-5 mt-1 flex-shrink-0" />
+                      <p>{systemSettings.rule7}</p>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           </div>
@@ -706,6 +805,133 @@ export default function NMRBookingSystem() {
     );
   }
 
+  // 系統設定面板
+  if (showSettingsPanel && currentUser?.is_admin) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <div className="bg-white shadow-sm border-b">
+          <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
+            <h1 className="text-2xl font-bold text-gray-800">系統設定</h1>
+            <button
+              onClick={() => setShowSettingsPanel(false)}
+              className="flex items-center gap-2 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition"
+            >
+              <X className="w-4 h-4" />
+              返回
+            </button>
+          </div>
+        </div>
+        
+        <div className="max-w-4xl mx-auto p-4">
+          <div className="bg-white rounded-lg shadow-sm p-6">
+            <h2 className="text-xl font-bold mb-4">登入頁面使用規則</h2>
+            <p className="text-sm text-gray-600 mb-6">修改登入頁面右側顯示的使用規則文字</p>
+            
+            {systemSettings && (
+              <div className="space-y-4">
+                {[1, 2, 3, 4, 5, 6, 7].map(num => (
+                  <div key={num}>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      規則 {num}
+                    </label>
+                    <input
+                      type="text"
+                      value={systemSettings[`rule${num}`]}
+                      onChange={(e) => setSystemSettings({
+                        ...systemSettings,
+                        [`rule${num}`]: e.target.value
+                      })}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+                ))}
+                
+                <button
+                  onClick={handleSaveSettings}
+                  className="w-full mt-6 px-4 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition font-medium"
+                >
+                  儲存設定
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // 歷史預約記錄面板
+  if (showHistoryPanel && currentUser?.is_admin) {
+    if (!historyBookings.length && !loading) {
+      loadHistoryBookings();
+    }
+
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <div className="bg-white shadow-sm border-b">
+          <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
+            <h1 className="text-2xl font-bold text-gray-800">歷史預約記錄</h1>
+            <button
+              onClick={() => setShowHistoryPanel(false)}
+              className="flex items-center gap-2 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition"
+            >
+              <X className="w-4 h-4" />
+              返回
+            </button>
+          </div>
+        </div>
+        
+        <div className="max-w-7xl mx-auto p-4">
+          <div className="bg-white rounded-lg shadow-sm overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">預約時間</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">用戶</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">實驗室</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">儀器</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">日期</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">時段</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {historyBookings.map(booking => (
+                    <tr key={booking.id} className="hover:bg-gray-50">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {new Date(booking.booked_at).toLocaleString('zh-TW')}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {booking.display_name}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {booking.pi} Lab
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {booking.instrument} MHz
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {booking.date}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {booking.time_slot}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {historyBookings.length === 0 && (
+              <div className="text-center py-12 text-gray-500">
+                暫無預約記錄
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // 管理員面板
   if (showAdminPanel && currentUser?.is_admin) {
     return (
@@ -840,21 +1066,37 @@ export default function NMRBookingSystem() {
               <h1 className="text-2xl font-bold text-gray-800">NMR預約系統</h1>
             </div>
             
-            <div className="flex items-center gap-4">
+                          <div className="flex items-center gap-4">
               <div className="flex items-center gap-2 text-sm">
                 <User className="w-4 h-4 text-gray-600" />
                 <span className="font-medium">{currentUser?.display_name}</span>
-                <span className="text-gray-500">({currentUser?.pi}教授實驗室)</span>
+                <span className="text-gray-500">({currentUser?.pi} Lab)</span>
               </div>
               
               {currentUser?.is_admin && (
-                <button
-                  onClick={() => setShowAdminPanel(true)}
-                  className="flex items-center gap-2 px-3 py-2 bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 transition text-sm"
-                >
-                  <Settings className="w-4 h-4" />
-                  用戶管理
-                </button>
+                <>
+                  <button
+                    onClick={() => setShowAdminPanel(true)}
+                    className="flex items-center gap-2 px-3 py-2 bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 transition text-sm"
+                  >
+                    <Settings className="w-4 h-4" />
+                    用戶管理
+                  </button>
+                  <button
+                    onClick={() => setShowHistoryPanel(true)}
+                    className="flex items-center gap-2 px-3 py-2 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 transition text-sm"
+                  >
+                    <Calendar className="w-4 h-4" />
+                    歷史記錄
+                  </button>
+                  <button
+                    onClick={() => setShowSettingsPanel(true)}
+                    className="flex items-center gap-2 px-3 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition text-sm"
+                  >
+                    <Settings className="w-4 h-4" />
+                    系統設定
+                  </button>
+                </>
               )}
               
               <button
@@ -941,7 +1183,7 @@ export default function NMRBookingSystem() {
                       {booking ? (
                         <div className="text-xs">
                           <p className="font-semibold">{booking.display_name}</p>
-                          <p className="text-gray-600">{booking.pi}教授實驗室</p>
+                          <p className="text-gray-600">{booking.pi} Lab</p>
                           {isMyBooking && !isPast && (
                             <button
                               onClick={(e) => {
