@@ -14,12 +14,18 @@ export default function NMRBookingSystem() {
   const [showAdminPanel, setShowAdminPanel] = useState(false);
   const [showHistoryPanel, setShowHistoryPanel] = useState(false);
   const [showSettingsPanel, setShowSettingsPanel] = useState(false);
+  const [showLabManagementPanel, setShowLabManagementPanel] = useState(false);
   const [loading, setLoading] = useState(false);
   const [showAddUserModal, setShowAddUserModal] = useState(false);
   const [showEditUserModal, setShowEditUserModal] = useState(false);
+  const [showAddLabModal, setShowAddLabModal] = useState(false);
+  const [showEditLabModal, setShowEditLabModal] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
+  const [editingLab, setEditingLab] = useState(null);
   const [historyBookings, setHistoryBookings] = useState([]);
   const [systemSettings, setSystemSettings] = useState(null);
+  const [labs, setLabs] = useState([]);
+  const [newLabForm, setNewLabForm] = useState({ name: '', description: '' });
   const [newUserForm, setNewUserForm] = useState({
     username: '',
     password: '',
@@ -31,6 +37,7 @@ export default function NMRBookingSystem() {
 
   useEffect(() => {
     loadSystemSettings();
+    loadLabs();
   }, []);
 
   useEffect(() => {
@@ -120,6 +127,20 @@ export default function NMRBookingSystem() {
     }
   };
 
+  const loadLabs = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('labs')
+        .select('*')
+        .order('name');
+      
+      if (error) throw error;
+      setLabs(data || []);
+    } catch (error) {
+      console.error('載入 Lab 列表失敗:', error);
+    }
+  };
+
   const loadBookings = async () => {
     if (!selectedInstrument || !selectedDate) return;
     
@@ -181,6 +202,7 @@ export default function NMRBookingSystem() {
     setShowAdminPanel(false);
     setShowHistoryPanel(false);
     setShowSettingsPanel(false);
+    setShowLabManagementPanel(false);
     setBookings([]);
   };
 
@@ -510,6 +532,101 @@ export default function NMRBookingSystem() {
     document.body.removeChild(link);
   };
 
+  const handleAddLab = async () => {
+    if (!newLabForm.name || newLabForm.name.trim() === '') {
+      alert('請輸入 Lab 名稱');
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('labs')
+        .insert([{
+          name: newLabForm.name.trim(),
+          description: newLabForm.description
+        }]);
+
+      if (error) {
+        if (error.code === '23505') {
+          alert('此 Lab 名稱已存在');
+        } else {
+          throw error;
+        }
+        return;
+      }
+
+      alert('Lab 新增成功！');
+      setShowAddLabModal(false);
+      setNewLabForm({ name: '', description: '' });
+      await loadLabs();
+    } catch (error) {
+      console.error('新增 Lab 失敗:', error);
+      alert('新增失敗，請稍後再試');
+    }
+  };
+
+  const handleEditLab = async () => {
+    if (!editingLab || !editingLab.name || editingLab.name.trim() === '') {
+      alert('請輸入 Lab 名稱');
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('labs')
+        .update({
+          name: editingLab.name.trim(),
+          description: editingLab.description
+        })
+        .eq('id', editingLab.id);
+
+      if (error) {
+        if (error.code === '23505') {
+          alert('此 Lab 名稱已存在');
+        } else {
+          throw error;
+        }
+        return;
+      }
+
+      alert('Lab 資料已更新！');
+      setShowEditLabModal(false);
+      setEditingLab(null);
+      await loadLabs();
+    } catch (error) {
+      console.error('更新 Lab 失敗:', error);
+      alert('更新失敗，請稍後再試');
+    }
+  };
+
+  const handleDeleteLab = async (labId, labName) => {
+    // 檢查是否有用戶使用此 Lab
+    const usersWithLab = users.filter(u => u.pi === labName);
+    if (usersWithLab.length > 0) {
+      alert(`無法刪除：有 ${usersWithLab.length} 個用戶使用此 Lab`);
+      return;
+    }
+
+    if (!confirm(`確定要刪除 Lab "${labName}" 嗎？`)) {
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('labs')
+        .delete()
+        .eq('id', labId);
+
+      if (error) throw error;
+
+      alert('Lab 已刪除');
+      await loadLabs();
+    } catch (error) {
+      console.error('刪除 Lab 失敗:', error);
+      alert('刪除失敗，請稍後再試');
+    }
+  };
+
   const toggleNewUserInstrument = (instrument) => {
     const current = newUserForm.instruments;
     if (current.includes(instrument)) {
@@ -674,6 +791,190 @@ export default function NMRBookingSystem() {
     );
   }
 
+  // 新增 Lab 彈窗
+  if (showAddLabModal) {
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+        <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-2xl font-bold text-gray-800">新增 Lab</h2>
+            <button onClick={() => setShowAddLabModal(false)} className="text-gray-500 hover:text-gray-700">
+              <X className="w-6 h-6" />
+            </button>
+          </div>
+
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Lab 名稱 *</label>
+              <input
+                type="text"
+                value={newLabForm.name}
+                onChange={(e) => setNewLabForm({...newLabForm, name: e.target.value})}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                placeholder="例如：003"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">描述（選填）</label>
+              <input
+                type="text"
+                value={newLabForm.description}
+                onChange={(e) => setNewLabForm({...newLabForm, description: e.target.value})}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                placeholder="例如：有機化學實驗室"
+              />
+            </div>
+          </div>
+
+          <div className="flex gap-3 mt-6">
+            <button
+              onClick={() => setShowAddLabModal(false)}
+              className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition"
+            >
+              取消
+            </button>
+            <button
+              onClick={handleAddLab}
+              className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition"
+            >
+              新增
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // 編輯 Lab 彈窗
+  if (showEditLabModal && editingLab) {
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+        <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-2xl font-bold text-gray-800">編輯 Lab</h2>
+            <button onClick={() => { setShowEditLabModal(false); setEditingLab(null); }} className="text-gray-500 hover:text-gray-700">
+              <X className="w-6 h-6" />
+            </button>
+          </div>
+
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Lab 名稱 *</label>
+              <input
+                type="text"
+                value={editingLab.name}
+                onChange={(e) => setEditingLab({...editingLab, name: e.target.value})}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">描述（選填）</label>
+              <input
+                type="text"
+                value={editingLab.description || ''}
+                onChange={(e) => setEditingLab({...editingLab, description: e.target.value})}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+              />
+            </div>
+          </div>
+
+          <div className="flex gap-3 mt-6">
+            <button
+              onClick={() => { setShowEditLabModal(false); setEditingLab(null); }}
+              className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition"
+            >
+              取消
+            </button>
+            <button
+              onClick={handleEditLab}
+              className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition"
+            >
+              儲存
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Lab 管理面板
+  if (showLabManagementPanel && currentUser?.is_admin) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <div className="bg-white shadow-sm border-b">
+          <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
+            <h1 className="text-2xl font-bold text-gray-800">Lab 管理</h1>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowAddLabModal(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition"
+              >
+                <UserPlus className="w-4 h-4" />
+                新增 Lab
+              </button>
+              <button
+                onClick={() => setShowLabManagementPanel(false)}
+                className="flex items-center gap-2 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition"
+              >
+                <X className="w-4 h-4" />
+                返回
+              </button>
+            </div>
+          </div>
+        </div>
+        
+        <div className="max-w-7xl mx-auto p-4">
+          <div className="bg-white rounded-lg shadow-sm p-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {labs.map(lab => {
+                const usersCount = users.filter(u => u.pi === lab.name).length;
+                return (
+                  <div key={lab.id} className="border rounded-lg p-4">
+                    <div className="flex justify-between items-start mb-3">
+                      <div className="flex-1">
+                        <p className="font-semibold text-lg">{lab.name}</p>
+                        {lab.description && (
+                          <p className="text-sm text-gray-600">{lab.description}</p>
+                        )}
+                        <p className="text-xs text-gray-500 mt-1">{usersCount} 個用戶使用中</p>
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => { setEditingLab({...lab}); setShowEditLabModal(true); }}
+                        className="flex-1 px-3 py-1 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition text-sm"
+                      >
+                        編輯
+                      </button>
+                      <button
+                        onClick={() => handleDeleteLab(lab.id, lab.name)}
+                        disabled={usersCount > 0}
+                        className={`flex-1 px-3 py-1 rounded-lg transition text-sm ${
+                          usersCount > 0
+                            ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                            : 'bg-red-100 text-red-700 hover:bg-red-200'
+                        }`}
+                      >
+                        刪除
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            {labs.length === 0 && (
+              <div className="text-center py-12 text-gray-500">
+                暫無 Lab 資料，請點擊右上角「新增 Lab」
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // 新增用戶彈窗
   if (showAddUserModal) {
     return (
@@ -722,13 +1023,16 @@ export default function NMRBookingSystem() {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Lab 名稱 *</label>
-              <input
-                type="text"
+              <select
                 value={newUserForm.pi}
                 onChange={(e) => setNewUserForm({...newUserForm, pi: e.target.value})}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-                placeholder="例如：000"
-              />
+              >
+                <option value="">請選擇 Lab</option>
+                {labs.map(lab => (
+                  <option key={lab.id} value={lab.name}>{lab.name} {lab.description && `(${lab.description})`}</option>
+                ))}
+              </select>
             </div>
 
             <div>
@@ -835,12 +1139,16 @@ export default function NMRBookingSystem() {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Lab 名稱 *</label>
-              <input
-                type="text"
+              <select
                 value={editingUser.pi}
                 onChange={(e) => setEditingUser({...editingUser, pi: e.target.value})}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-              />
+              >
+                <option value="">請選擇 Lab</option>
+                {labs.map(lab => (
+                  <option key={lab.id} value={lab.name}>{lab.name} {lab.description && `(${lab.description})`}</option>
+                ))}
+              </select>
             </div>
 
             <div className="flex items-center gap-2">
@@ -1192,6 +1500,13 @@ export default function NMRBookingSystem() {
                   >
                     <Settings className="w-4 h-4" />
                     用戶管理
+                  </button>
+                  <button
+                    onClick={() => setShowLabManagementPanel(true)}
+                    className="flex items-center gap-2 px-3 py-2 bg-teal-100 text-teal-700 rounded-lg hover:bg-teal-200 transition text-sm"
+                  >
+                    <Settings className="w-4 h-4" />
+                    Lab 管理
                   </button>
                   <button
                     onClick={() => setShowHistoryPanel(true)}
