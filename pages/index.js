@@ -689,13 +689,12 @@ export default function NMRBookingSystem() {
                 </button>
               </div>
 
-              <div className="mt-6 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+              <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
                 <div className="flex items-start gap-2">
-                  <AlertCircle className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
-                  <div className="text-sm">
-                    <p className="font-semibold text-amber-900 mb-1">測試帳號</p>
-                    <p className="text-amber-800">管理員: admin / admin123</p>
-                    <p className="text-amber-800">一般用戶: user1 / pass123</p>
+                  <AlertCircle className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
+                  <div className="text-sm text-blue-800">
+                    <p className="font-semibold mb-1">歡迎使用</p>
+                    <p>請使用您的帳號密碼登入系統</p>
                   </div>
                 </div>
               </div>
@@ -1360,6 +1359,13 @@ export default function NMRBookingSystem() {
             <h1 className="text-2xl font-bold text-gray-800">用戶管理</h1>
             <div className="flex gap-3">
               <button
+                onClick={() => setShowLabManagementPanel(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-teal-500 text-white rounded-lg hover:bg-teal-600 transition"
+              >
+                <Settings className="w-4 h-4" />
+                Lab 管理
+              </button>
+              <button
                 onClick={() => setShowAddUserModal(true)}
                 className="flex items-center gap-2 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition"
               >
@@ -1500,13 +1506,6 @@ export default function NMRBookingSystem() {
                   >
                     <Settings className="w-4 h-4" />
                     用戶管理
-                  </button>
-                  <button
-                    onClick={() => setShowLabManagementPanel(true)}
-                    className="flex items-center gap-2 px-3 py-2 bg-teal-100 text-teal-700 rounded-lg hover:bg-teal-200 transition text-sm"
-                  >
-                    <Settings className="w-4 h-4" />
-                    Lab 管理
                   </button>
                   <button
                     onClick={() => setShowHistoryPanel(true)}
