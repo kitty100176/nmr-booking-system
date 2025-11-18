@@ -237,12 +237,12 @@ export default function NMRBookingSystem() {
 
   const handleBooking = async (timeSlot) => {
     if (!selectedInstrument || !selectedDate) {
-      alert('請選擇儀器和日期');
+      alert('請選擇儀器和日期\nPlease select instrument and date');
       return;
     }
 
     if (isTimePassed(selectedDate, timeSlot)) {
-      alert('不可預約已過去的時間');
+      alert('不可預約已過去的時間\nCannot book past time slots');
       return;
     }
 
@@ -261,24 +261,24 @@ export default function NMRBookingSystem() {
 
       if (error) {
         if (error.code === '23505') {
-          alert('此時段已被預約');
+          alert('此時段已被預約\nThis time slot is already booked');
         } else {
           throw error;
         }
         return;
       }
 
-      alert('預約成功！');
+      alert('預約成功！\nBooking successful!');
       await loadBookings();
     } catch (error) {
       console.error('預約失敗:', error);
-      alert('預約失敗，請稍後再試');
+      alert('預約失敗，請稍後再試\nBooking failed, please try again later');
     }
   };
 
   const handleCancelBooking = async (bookingId, timeSlot) => {
     if (isTimePassed(selectedDate, timeSlot)) {
-      alert('不可取消已過去的預約');
+      alert('不可取消已過去的預約\nCannot cancel past bookings');
       return;
     }
 
@@ -290,11 +290,11 @@ export default function NMRBookingSystem() {
 
       if (error) throw error;
 
-      alert('已取消預約');
+      alert('已取消預約\nBooking cancelled');
       await loadBookings();
     } catch (error) {
       console.error('取消失敗:', error);
-      alert('取消失敗，請稍後再試');
+      alert('取消失敗，請稍後再試\nCancellation failed, please try again later');
     }
   };
 
@@ -767,15 +767,24 @@ export default function NMRBookingSystem() {
             <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <Check className="w-8 h-8 text-green-600" />
             </div>
-            <h2 className="text-2xl font-bold text-gray-800 mb-2">登入成功！Login Successful!</h2>
+            <h2 className="text-2xl font-bold text-gray-800 mb-2">登入成功！</h2>
             <p className="text-gray-600 mb-6">歡迎使用NMR預約系統<br/>Welcome to NMR Booking System</p>
             
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6 text-left">
-              <p className="text-sm text-gray-700 mb-2"><strong>注意事項 Notes:</strong></p>
-              <ul className="text-sm text-gray-600 space-y-1 list-disc list-inside">
-                <li>請勿預約已過去的時段 / Do not book past time slots</li>
-                <li>預約後請準時使用 / Please use the equipment on time</li>
-                <li>使用完畢請保持儀器清潔 / Keep the equipment clean after use</li>
+              <p className="text-sm text-gray-700 mb-3"><strong>注意事項 Notes:</strong></p>
+              <ul className="text-sm text-gray-600 space-y-2">
+                <li className="list-none">
+                  • 請勿預約已過去的時段<br/>
+                  <span className="ml-3">Do not book past time slots</span>
+                </li>
+                <li className="list-none">
+                  • 預約後請準時使用<br/>
+                  <span className="ml-3">Please use the equipment on time</span>
+                </li>
+                <li className="list-none">
+                  • 使用完畢請保持儀器清潔<br/>
+                  <span className="ml-3">Keep the equipment clean after use</span>
+                </li>
               </ul>
             </div>
             
@@ -783,7 +792,7 @@ export default function NMRBookingSystem() {
               onClick={() => setShowNotification(false)}
               className="w-full bg-indigo-600 text-white py-3 rounded-lg hover:bg-indigo-700 transition font-medium"
             >
-              開始使用 Start
+              Start
             </button>
           </div>
         </div>
@@ -1618,12 +1627,12 @@ export default function NMRBookingSystem() {
                               }}
                               className="mt-2 w-full px-2 py-1 bg-red-500 text-white rounded text-xs hover:bg-red-600 transition"
                             >
-                              取消
+                              取消 Cancel
                             </button>
                           )}
                         </div>
                       ) : (
-                        !isPast && <p className="text-xs text-gray-500">可預約</p>
+                        !isPast && <p className="text-xs text-gray-500">可預約<br/>Available</p>
                       )}
                     </div>
                   );
@@ -1635,6 +1644,7 @@ export default function NMRBookingSystem() {
           <div className="bg-white rounded-lg shadow-sm p-12 text-center">
             <Calendar className="w-16 h-16 text-gray-300 mx-auto mb-4" />
             <p className="text-gray-500">請選擇儀器和日期以查看可預約時段</p>
+            <p className="text-gray-400 text-sm mt-2">Please select instrument and date to view available time slots</p>
           </div>
         )}
       </div>
