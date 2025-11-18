@@ -660,7 +660,7 @@ export default function NMRBookingSystem() {
               
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">帳號</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">帳號 Account</label>
                   <input
                     type="text"
                     value={loginForm.username}
@@ -671,7 +671,7 @@ export default function NMRBookingSystem() {
                 </div>
                 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">密碼</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">密碼 Password</label>
                   <input
                     type="password"
                     value={loginForm.password}
@@ -685,7 +685,7 @@ export default function NMRBookingSystem() {
                   onClick={handleLogin}
                   className="w-full bg-indigo-600 text-white py-3 rounded-lg hover:bg-indigo-700 transition font-medium"
                 >
-                  登入
+                  登入 Login
                 </button>
               </div>
 
@@ -693,7 +693,8 @@ export default function NMRBookingSystem() {
                 <div className="flex items-start gap-2">
                   <AlertCircle className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
                   <div className="text-sm text-blue-800">
-                    <p className="font-semibold mb-1">歡迎使用</p>
+                    <p className="font-semibold mb-1">Welcome 歡迎使用</p>
+                    <p>Please login with your account and password</p>
                     <p>請使用您的帳號密碼登入系統</p>
                   </div>
                 </div>
@@ -701,7 +702,7 @@ export default function NMRBookingSystem() {
             </div>
             
             <div className="md:w-1/2 bg-indigo-600 text-white p-8 flex flex-col max-h-screen">
-              <h2 className="text-2xl font-bold mb-6 flex-shrink-0">使用規則</h2>
+              <h2 className="text-2xl font-bold mb-6 flex-shrink-0">使用規則 Rules</h2>
               <div className="space-y-4 overflow-y-auto flex-1 pr-2">
                 {systemSettings ? (
                   [1, 2, 3, 4, 5, 6, 7].map(num => {
@@ -766,15 +767,15 @@ export default function NMRBookingSystem() {
             <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <Check className="w-8 h-8 text-green-600" />
             </div>
-            <h2 className="text-2xl font-bold text-gray-800 mb-2">登入成功！</h2>
-            <p className="text-gray-600 mb-6">歡迎使用NMR預約系統</p>
+            <h2 className="text-2xl font-bold text-gray-800 mb-2">登入成功！Login Successful!</h2>
+            <p className="text-gray-600 mb-6">歡迎使用NMR預約系統<br/>Welcome to NMR Booking System</p>
             
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6 text-left">
-              <p className="text-sm text-gray-700 mb-2"><strong>注意事項：</strong></p>
+              <p className="text-sm text-gray-700 mb-2"><strong>注意事項 Notes:</strong></p>
               <ul className="text-sm text-gray-600 space-y-1 list-disc list-inside">
-                <li>請勿預約已過去的時段</li>
-                <li>預約後請準時使用</li>
-                <li>使用完畢請保持儀器清潔</li>
+                <li>請勿預約已過去的時段 / Do not book past time slots</li>
+                <li>預約後請準時使用 / Please use the equipment on time</li>
+                <li>使用完畢請保持儀器清潔 / Keep the equipment clean after use</li>
               </ul>
             </div>
             
@@ -782,7 +783,7 @@ export default function NMRBookingSystem() {
               onClick={() => setShowNotification(false)}
               className="w-full bg-indigo-600 text-white py-3 rounded-lg hover:bg-indigo-700 transition font-medium"
             >
-              開始使用
+              開始使用 Start
             </button>
           </div>
         </div>
@@ -1443,17 +1444,17 @@ export default function NMRBookingSystem() {
                   </div>
                   <div className="flex gap-3">
                     <button
-                      onClick={() => toggleUserInstrument(user.id, '50')}
+                      onClick={() => toggleUserInstrument(user.id, '60')}
                       disabled={user.active === false}
                       className={`px-4 py-2 rounded-lg font-medium transition ${
                         user.active === false
                           ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                          : user.instruments?.includes('50')
+                          : user.instruments?.includes('60')
                           ? 'bg-green-500 text-white hover:bg-green-600'
                           : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
                       }`}
                     >
-                      50 MHz {user.instruments?.includes('50') ? '✓' : ''}
+                      60 MHz {user.instruments?.includes('60') ? '✓' : ''}
                     </button>
                     <button
                       onClick={() => toggleUserInstrument(user.id, '500')}
@@ -1529,7 +1530,7 @@ export default function NMRBookingSystem() {
                 className="flex items-center gap-2 px-3 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition text-sm"
               >
                 <LogOut className="w-4 h-4" />
-                登出
+                登出 Logout
               </button>
             </div>
           </div>
@@ -1540,15 +1541,15 @@ export default function NMRBookingSystem() {
         <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">選擇儀器</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">選擇儀器 Select Instrument</label>
               <select
                 value={selectedInstrument}
                 onChange={(e) => setSelectedInstrument(e.target.value)}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
               >
-                <option value="">請選擇儀器</option>
+                <option value="">請選擇儀器 Please select</option>
                 {currentUser?.instruments?.length === 0 ? (
-                  <option disabled>您尚無儀器使用權限</option>
+                  <option disabled>您尚無儀器使用權限 No instrument permission</option>
                 ) : (
                   currentUser?.instruments?.map(instrument => (
                     <option key={instrument} value={instrument}>{instrument} MHz NMR</option>
@@ -1558,7 +1559,7 @@ export default function NMRBookingSystem() {
             </div>
             
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">選擇日期</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">選擇日期 Select Date</label>
               <input
                 type="date"
                 value={selectedDate}
