@@ -693,9 +693,8 @@ export default function NMRBookingSystem() {
                 <div className="flex items-start gap-2">
                   <AlertCircle className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
                   <div className="text-sm text-blue-800">
-                    <p className="font-semibold mb-1">Welcome 歡迎使用</p>
+                    <p className="mb-1">請使用您的帳號密碼登入系統</p>
                     <p>Please login with your account and password</p>
-                    <p>請使用您的帳號密碼登入系統</p>
                   </div>
                 </div>
               </div>
