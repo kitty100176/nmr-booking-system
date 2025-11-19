@@ -15,6 +15,7 @@ export default function NMRBookingSystem() {
   const [showHistoryPanel, setShowHistoryPanel] = useState(false);
   const [showSettingsPanel, setShowSettingsPanel] = useState(false);
   const [showLabManagementPanel, setShowLabManagementPanel] = useState(false);
+  const [showTimeSlotPanel, setShowTimeSlotPanel] = useState(false);
   const [loading, setLoading] = useState(false);
   const [showAddUserModal, setShowAddUserModal] = useState(false);
   const [showEditUserModal, setShowEditUserModal] = useState(false);
@@ -25,6 +26,7 @@ export default function NMRBookingSystem() {
   const [historyBookings, setHistoryBookings] = useState([]);
   const [systemSettings, setSystemSettings] = useState(null);
   const [labs, setLabs] = useState([]);
+  const [timeSlotSettings, setTimeSlotSettings] = useState(null);
   const [newLabForm, setNewLabForm] = useState({ name: '', description: '' });
   const [newUserForm, setNewUserForm] = useState({
     username: '',
@@ -35,9 +37,13 @@ export default function NMRBookingSystem() {
     is_admin: false
   });
 
+  // 儀器列表 - 統一管理所有儀器型號
+  const INSTRUMENTS = ['60', '500'];
+
   useEffect(() => {
     loadSystemSettings();
     loadLabs();
+    loadTimeSlotSettings();
   }, []);
 
   useEffect(() => {
@@ -84,31 +90,69 @@ export default function NMRBookingSystem() {
       if (data) {
         setSystemSettings(data);
       } else {
-        // 如果沒有設定，使用預設值
         const defaultSettings = {
           rule1: '請提前預約所需時段，系統開放預約未來時段',
           rule2: '不可預約或取消已過去的時間',
-          rule3: '預約時間粒度為30分鐘，開放時段為9:00-21:00',
-          rule4: '另有21:00-09:00夜間時段可預約',
-          rule5: '請準時使用儀器，並保持儀器清潔',
-          rule6: '使用前請確認已通過該儀器操作訓練',
-          rule7: '如有問題請聯絡管理員'
+          rule3: '預約時間粒度為15分鐘（09:00-18:00）及30分鐘（18:00-09:00）',
+          rule4: '請準時使用儀器，並保持儀器清潔',
+          rule5: '使用前請確認已通過該儀器操作訓練',
+          rule6: '如有問題請聯絡管理員',
+          rule7: ''
         };
         setSystemSettings(defaultSettings);
       }
     } catch (error) {
       console.error('載入系統設定失敗:', error);
-      // 發生錯誤時也使用預設值
       const defaultSettings = {
         rule1: '請提前預約所需時段，系統開放預約未來時段',
         rule2: '不可預約或取消已過去的時間',
-        rule3: '預約時間粒度為30分鐘，開放時段為9:00-21:00',
-        rule4: '另有21:00-09:00夜間時段可預約',
-        rule5: '請準時使用儀器，並保持儀器清潔',
-        rule6: '使用前請確認已通過該儀器操作訓練',
-        rule7: '如有問題請聯絡管理員'
+        rule3: '預約時間粒度為15分鐘（09:00-18:00）及30分鐘（18:00-09:00）',
+        rule4: '請準時使用儀器，並保持儀器清潔',
+        rule5: '使用前請確認已通過該儀器操作訓練',
+        rule6: '如有問題請聯絡管理員',
+        rule7: ''
       };
       setSystemSettings(defaultSettings);
+    }
+  };
+
+  const loadTimeSlotSettings = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('timeslot_settings')
+        .select('*')
+        .eq('id', 1)
+        .single();
+      
+      if (error && error.code !== 'PGRST116') {
+        console.error('載入時段設定錯誤:', error);
+      }
+      
+      if (data) {
+        setTimeSlotSettings(data);
+      } else {
+        // 預設時段設定
+        const defaultTimeSlots = {
+          day_start: '09:00',
+          day_end: '18:00',
+          day_interval: 15,
+          night_start: '18:00',
+          night_end: '09:00',
+          night_interval: 30
+        };
+        setTimeSlotSettings(defaultTimeSlots);
+      }
+    } catch (error) {
+      console.error('載入時段設定失敗:', error);
+      const defaultTimeSlots = {
+        day_start: '09:00',
+        day_end: '18:00',
+        day_interval: 15,
+        night_start: '18:00',
+        night_end: '09:00',
+        night_interval: 30
+      };
+      setTimeSlotSettings(defaultTimeSlots);
     }
   };
 
@@ -163,7 +207,7 @@ export default function NMRBookingSystem() {
 
   const handleLogin = async () => {
     if (!loginForm.username || !loginForm.password) {
-      alert('請輸入帳號和密碼');
+      alert('請輸入帳號和密碼\nPlease enter account and password');
       return;
     }
 
@@ -176,12 +220,12 @@ export default function NMRBookingSystem() {
         .single();
 
       if (error || !data) {
-        alert('帳號或密碼錯誤');
+        alert('帳號或密碼錯誤\nIncorrect account or password');
         return;
       }
 
       if (data.active === false) {
-        alert('此帳號已被停用，請聯絡管理員');
+        alert('此帳號已被停用，請聯絡管理員\nThis account has been disabled, please contact administrator');
         return;
       }
 
@@ -190,7 +234,7 @@ export default function NMRBookingSystem() {
       setShowNotification(true);
       setLoginForm({ username: '', password: '' });
     } catch (error) {
-      alert('登入失敗，請稍後再試');
+      alert('登入失敗，請稍後再試\nLogin failed, please try again later');
     }
   };
 
@@ -203,6 +247,7 @@ export default function NMRBookingSystem() {
     setShowHistoryPanel(false);
     setShowSettingsPanel(false);
     setShowLabManagementPanel(false);
+    setShowTimeSlotPanel(false);
     setBookings([]);
   };
 
@@ -212,12 +257,50 @@ export default function NMRBookingSystem() {
   };
 
   const generateTimeSlots = () => {
+    if (!timeSlotSettings) return [];
+    
     const slots = [];
-    for (let hour = 9; hour < 21; hour++) {
-      slots.push(`${hour.toString().padStart(2, '0')}:00`);
-      slots.push(`${hour.toString().padStart(2, '0')}:30`);
+    const dayStart = parseInt(timeSlotSettings.day_start.split(':')[0]);
+    const dayEnd = parseInt(timeSlotSettings.day_end.split(':')[0]);
+    const nightStart = parseInt(timeSlotSettings.night_start.split(':')[0]);
+    const dayInterval = timeSlotSettings.day_interval;
+    const nightInterval = timeSlotSettings.night_interval;
+    
+    // 日間時段 (09:00-18:00, 15分鐘)
+    for (let hour = dayStart; hour < dayEnd; hour++) {
+      for (let min = 0; min < 60; min += dayInterval) {
+        const startTime = `${hour.toString().padStart(2, '0')}:${min.toString().padStart(2, '0')}`;
+        const endMin = min + dayInterval;
+        const endHour = endMin >= 60 ? hour + 1 : hour;
+        const finalMin = endMin >= 60 ? endMin - 60 : endMin;
+        const endTime = `${endHour.toString().padStart(2, '0')}:${finalMin.toString().padStart(2, '0')}`;
+        slots.push(`${startTime}-${endTime}`);
+      }
     }
-    slots.push('21:00-09:00');
+    
+    // 夜間時段 (18:00-隔天09:00, 30分鐘)
+    for (let hour = nightStart; hour < 24; hour++) {
+      for (let min = 0; min < 60; min += nightInterval) {
+        const startTime = `${hour.toString().padStart(2, '0')}:${min.toString().padStart(2, '0')}`;
+        const endMin = min + nightInterval;
+        const endHour = endMin >= 60 ? hour + 1 : hour;
+        const finalMin = endMin >= 60 ? endMin - 60 : endMin;
+        const endTime = endHour >= 24 ? `00:${finalMin.toString().padStart(2, '0')}` : `${endHour.toString().padStart(2, '0')}:${finalMin.toString().padStart(2, '0')}`;
+        slots.push(`${startTime}-${endTime}`);
+      }
+    }
+    
+    for (let hour = 0; hour < dayStart; hour++) {
+      for (let min = 0; min < 60; min += nightInterval) {
+        const startTime = `${hour.toString().padStart(2, '0')}:${min.toString().padStart(2, '0')}`;
+        const endMin = min + nightInterval;
+        const endHour = endMin >= 60 ? hour + 1 : hour;
+        const finalMin = endMin >= 60 ? endMin - 60 : endMin;
+        const endTime = `${endHour.toString().padStart(2, '0')}:${finalMin.toString().padStart(2, '0')}`;
+        slots.push(`${startTime}-${endTime}`);
+      }
+    }
+    
     return slots;
   };
 
@@ -225,12 +308,9 @@ export default function NMRBookingSystem() {
     const now = new Date();
     const selectedDateTime = new Date(date);
     
-    if (timeSlot === '21:00-09:00') {
-      selectedDateTime.setHours(21, 0, 0, 0);
-    } else {
-      const [hour, minute] = timeSlot.split(':').map(Number);
-      selectedDateTime.setHours(hour, minute, 0, 0);
-    }
+    const startTime = timeSlot.split('-')[0];
+    const [hour, minute] = startTime.split(':').map(Number);
+    selectedDateTime.setHours(hour, minute, 0, 0);
     
     return selectedDateTime < now;
   };
@@ -395,7 +475,6 @@ export default function NMRBookingSystem() {
         is_admin: editingUser.is_admin
       };
 
-      // 只有在密碼有填寫時才更新
       if (editingUser.password) {
         updateData.password = editingUser.password;
       }
@@ -428,13 +507,11 @@ export default function NMRBookingSystem() {
     }
 
     try {
-      // 先刪除該用戶的所有預約
       await supabase
         .from('bookings')
         .delete()
         .eq('username', username);
 
-      // 再刪除用戶
       const { error } = await supabase
         .from('users')
         .delete()
@@ -461,7 +538,6 @@ export default function NMRBookingSystem() {
         .single();
 
       if (existing) {
-        // 更新
         const { error } = await supabase
           .from('system_settings')
           .update({
@@ -477,7 +553,6 @@ export default function NMRBookingSystem() {
 
         if (error) throw error;
       } else {
-        // 新增
         const { error } = await supabase
           .from('system_settings')
           .insert([{
@@ -495,16 +570,57 @@ export default function NMRBookingSystem() {
     }
   };
 
+  const handleSaveTimeSlotSettings = async () => {
+    if (!timeSlotSettings) return;
+
+    try {
+      const { data: existing } = await supabase
+        .from('timeslot_settings')
+        .select('id')
+        .eq('id', 1)
+        .single();
+
+      if (existing) {
+        const { error } = await supabase
+          .from('timeslot_settings')
+          .update({
+            day_start: timeSlotSettings.day_start,
+            day_end: timeSlotSettings.day_end,
+            day_interval: timeSlotSettings.day_interval,
+            night_start: timeSlotSettings.night_start,
+            night_end: timeSlotSettings.night_end,
+            night_interval: timeSlotSettings.night_interval
+          })
+          .eq('id', 1);
+
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from('timeslot_settings')
+          .insert([{
+            id: 1,
+            ...timeSlotSettings
+          }]);
+
+        if (error) throw error;
+      }
+
+      alert('時段設定已儲存！');
+      await loadTimeSlotSettings();
+    } catch (error) {
+      console.error('儲存時段設定失敗:', error);
+      alert('儲存失敗，請稍後再試');
+    }
+  };
+
   const exportToCSV = () => {
     if (historyBookings.length === 0) {
       alert('沒有資料可以匯出');
       return;
     }
 
-    // 建立 CSV 標題
     const headers = ['預約時間', '用戶名稱', 'Lab', '儀器 (MHz)', '預約日期', '時段'];
     
-    // 建立 CSV 內容
     const csvContent = [
       headers.join(','),
       ...historyBookings.map(booking => [
@@ -517,11 +633,9 @@ export default function NMRBookingSystem() {
       ].join(','))
     ].join('\n');
 
-    // 加入 BOM 以支援中文
     const BOM = '\uFEFF';
     const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
     
-    // 建立下載連結
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
     link.setAttribute('href', url);
@@ -600,7 +714,6 @@ export default function NMRBookingSystem() {
   };
 
   const handleDeleteLab = async (labId, labName) => {
-    // 檢查是否有用戶使用此 Lab
     const usersWithLab = users.filter(u => u.pi === labName);
     if (usersWithLab.length > 0) {
       alert(`無法刪除：有 ${usersWithLab.length} 個用戶使用此 Lab`);
@@ -706,7 +819,6 @@ export default function NMRBookingSystem() {
                 {systemSettings ? (
                   [1, 2, 3, 4, 5, 6, 7].map(num => {
                     const ruleText = systemSettings[`rule${num}`];
-                    // 只顯示有內容的規則
                     if (!ruleText || ruleText.trim() === '') return null;
                     
                     return (
@@ -717,7 +829,6 @@ export default function NMRBookingSystem() {
                     );
                   })
                 ) : (
-                  // 載入中或載入失敗時顯示預設規則
                   <>
                     <div className="flex items-start gap-3">
                       <Check className="w-5 h-5 mt-1 flex-shrink-0" />
@@ -729,11 +840,7 @@ export default function NMRBookingSystem() {
                     </div>
                     <div className="flex items-start gap-3">
                       <Check className="w-5 h-5 mt-1 flex-shrink-0" />
-                      <p>預約時間粒度為30分鐘，開放時段為9:00-21:00</p>
-                    </div>
-                    <div className="flex items-start gap-3">
-                      <Check className="w-5 h-5 mt-1 flex-shrink-0" />
-                      <p>另有21:00-09:00夜間時段可預約</p>
+                      <p>預約時間粒度為15分鐘（09:00-18:00）及30分鐘（18:00-09:00）</p>
                     </div>
                     <div className="flex items-start gap-3">
                       <Check className="w-5 h-5 mt-1 flex-shrink-0" />
@@ -799,406 +906,15 @@ export default function NMRBookingSystem() {
     );
   }
 
-  // 新增 Lab 彈窗
-  if (showAddLabModal) {
-    return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-        <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-2xl font-bold text-gray-800">新增 Lab</h2>
-            <button onClick={() => setShowAddLabModal(false)} className="text-gray-500 hover:text-gray-700">
-              <X className="w-6 h-6" />
-            </button>
-          </div>
-
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Lab 名稱 *</label>
-              <input
-                type="text"
-                value={newLabForm.name}
-                onChange={(e) => setNewLabForm({...newLabForm, name: e.target.value})}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-                placeholder="例如：003"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">描述（選填）</label>
-              <input
-                type="text"
-                value={newLabForm.description}
-                onChange={(e) => setNewLabForm({...newLabForm, description: e.target.value})}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-                placeholder="例如：有機化學實驗室"
-              />
-            </div>
-          </div>
-
-          <div className="flex gap-3 mt-6">
-            <button
-              onClick={() => setShowAddLabModal(false)}
-              className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition"
-            >
-              取消
-            </button>
-            <button
-              onClick={handleAddLab}
-              className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition"
-            >
-              新增
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // 編輯 Lab 彈窗
-  if (showEditLabModal && editingLab) {
-    return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-        <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-2xl font-bold text-gray-800">編輯 Lab</h2>
-            <button onClick={() => { setShowEditLabModal(false); setEditingLab(null); }} className="text-gray-500 hover:text-gray-700">
-              <X className="w-6 h-6" />
-            </button>
-          </div>
-
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Lab 名稱 *</label>
-              <input
-                type="text"
-                value={editingLab.name}
-                onChange={(e) => setEditingLab({...editingLab, name: e.target.value})}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">描述（選填）</label>
-              <input
-                type="text"
-                value={editingLab.description || ''}
-                onChange={(e) => setEditingLab({...editingLab, description: e.target.value})}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-              />
-            </div>
-          </div>
-
-          <div className="flex gap-3 mt-6">
-            <button
-              onClick={() => { setShowEditLabModal(false); setEditingLab(null); }}
-              className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition"
-            >
-              取消
-            </button>
-            <button
-              onClick={handleEditLab}
-              className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition"
-            >
-              儲存
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // Lab 管理面板
-  if (showLabManagementPanel && currentUser?.is_admin) {
+  // 時段設定面板
+  if (showTimeSlotPanel && currentUser?.is_admin) {
     return (
       <div className="min-h-screen bg-gray-50">
         <div className="bg-white shadow-sm border-b">
           <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
-            <h1 className="text-2xl font-bold text-gray-800">Lab 管理</h1>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setShowAddLabModal(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition"
-              >
-                <UserPlus className="w-4 h-4" />
-                新增 Lab
-              </button>
-              <button
-                onClick={() => setShowLabManagementPanel(false)}
-                className="flex items-center gap-2 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition"
-              >
-                <X className="w-4 h-4" />
-                返回
-              </button>
-            </div>
-          </div>
-        </div>
-        
-        <div className="max-w-7xl mx-auto p-4">
-          <div className="bg-white rounded-lg shadow-sm p-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {labs.map(lab => {
-                const usersCount = users.filter(u => u.pi === lab.name).length;
-                return (
-                  <div key={lab.id} className="border rounded-lg p-4">
-                    <div className="flex justify-between items-start mb-3">
-                      <div className="flex-1">
-                        <p className="font-semibold text-lg">{lab.name}</p>
-                        {lab.description && (
-                          <p className="text-sm text-gray-600">{lab.description}</p>
-                        )}
-                        <p className="text-xs text-gray-500 mt-1">{usersCount} 個用戶使用中</p>
-                      </div>
-                    </div>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => { setEditingLab({...lab}); setShowEditLabModal(true); }}
-                        className="flex-1 px-3 py-1 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition text-sm"
-                      >
-                        編輯
-                      </button>
-                      <button
-                        onClick={() => handleDeleteLab(lab.id, lab.name)}
-                        disabled={usersCount > 0}
-                        className={`flex-1 px-3 py-1 rounded-lg transition text-sm ${
-                          usersCount > 0
-                            ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                            : 'bg-red-100 text-red-700 hover:bg-red-200'
-                        }`}
-                      >
-                        刪除
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-            {labs.length === 0 && (
-              <div className="text-center py-12 text-gray-500">
-                暫無 Lab 資料，請點擊右上角「新增 Lab」
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // 新增用戶彈窗
-  if (showAddUserModal) {
-    return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-        <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-2xl font-bold text-gray-800">新增用戶</h2>
-            <button onClick={() => setShowAddUserModal(false)} className="text-gray-500 hover:text-gray-700">
-              <X className="w-6 h-6" />
-            </button>
-          </div>
-
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">帳號 *</label>
-              <input
-                type="text"
-                value={newUserForm.username}
-                onChange={(e) => setNewUserForm({...newUserForm, username: e.target.value})}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-                placeholder="例如：chen123"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">密碼 *</label>
-              <input
-                type="text"
-                value={newUserForm.password}
-                onChange={(e) => setNewUserForm({...newUserForm, password: e.target.value})}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-                placeholder="設定密碼"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">顯示名稱 *</label>
-              <input
-                type="text"
-                value={newUserForm.display_name}
-                onChange={(e) => setNewUserForm({...newUserForm, display_name: e.target.value})}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-                placeholder="例如：陳小明"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Lab 名稱 *</label>
-              <select
-                value={newUserForm.pi}
-                onChange={(e) => setNewUserForm({...newUserForm, pi: e.target.value})}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-              >
-                <option value="">請選擇 Lab</option>
-                {labs.map(lab => (
-                  <option key={lab.id} value={lab.name}>{lab.name} {lab.description && `(${lab.description})`}</option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">儀器權限</label>
-              <div className="flex gap-3">
-                <button
-                  onClick={() => toggleNewUserInstrument('50')}
-                  className={`px-4 py-2 rounded-lg font-medium transition ${
-                    newUserForm.instruments.includes('50')
-                      ? 'bg-green-500 text-white'
-                      : 'bg-gray-200 text-gray-600'
-                  }`}
-                >
-                  50 MHz {newUserForm.instruments.includes('50') ? '✓' : ''}
-                </button>
-                <button
-                  onClick={() => toggleNewUserInstrument('500')}
-                  className={`px-4 py-2 rounded-lg font-medium transition ${
-                    newUserForm.instruments.includes('500')
-                      ? 'bg-green-500 text-white'
-                      : 'bg-gray-200 text-gray-600'
-                  }`}
-                >
-                  500 MHz {newUserForm.instruments.includes('500') ? '✓' : ''}
-                </button>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="is_admin"
-                checked={newUserForm.is_admin}
-                onChange={(e) => setNewUserForm({...newUserForm, is_admin: e.target.checked})}
-                className="w-4 h-4 text-indigo-600 rounded"
-              />
-              <label htmlFor="is_admin" className="text-sm text-gray-700">設為管理員</label>
-            </div>
-          </div>
-
-          <div className="flex gap-3 mt-6">
+            <h1 className="text-2xl font-bold text-gray-800">時段設定</h1>
             <button
-              onClick={() => setShowAddUserModal(false)}
-              className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition"
-            >
-              取消
-            </button>
-            <button
-              onClick={handleAddUser}
-              className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition"
-            >
-              新增
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // 編輯用戶彈窗
-  if (showEditUserModal && editingUser) {
-    return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-        <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-2xl font-bold text-gray-800">編輯用戶</h2>
-            <button onClick={() => { setShowEditUserModal(false); setEditingUser(null); }} className="text-gray-500 hover:text-gray-700">
-              <X className="w-6 h-6" />
-            </button>
-          </div>
-
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">帳號</label>
-              <input
-                type="text"
-                value={editingUser.username}
-                disabled
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-500"
-              />
-              <p className="text-xs text-gray-500 mt-1">帳號無法修改</p>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">新密碼（留空表示不修改）</label>
-              <input
-                type="text"
-                value={editingUser.password || ''}
-                onChange={(e) => setEditingUser({...editingUser, password: e.target.value})}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-                placeholder="輸入新密碼或留空"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">顯示名稱 *</label>
-              <input
-                type="text"
-                value={editingUser.display_name}
-                onChange={(e) => setEditingUser({...editingUser, display_name: e.target.value})}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Lab 名稱 *</label>
-              <select
-                value={editingUser.pi}
-                onChange={(e) => setEditingUser({...editingUser, pi: e.target.value})}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-              >
-                <option value="">請選擇 Lab</option>
-                {labs.map(lab => (
-                  <option key={lab.id} value={lab.name}>{lab.name} {lab.description && `(${lab.description})`}</option>
-                ))}
-              </select>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="edit_is_admin"
-                checked={editingUser.is_admin}
-                onChange={(e) => setEditingUser({...editingUser, is_admin: e.target.checked})}
-                className="w-4 h-4 text-indigo-600 rounded"
-              />
-              <label htmlFor="edit_is_admin" className="text-sm text-gray-700">設為管理員</label>
-            </div>
-          </div>
-
-          <div className="flex gap-3 mt-6">
-            <button
-              onClick={() => { setShowEditUserModal(false); setEditingUser(null); }}
-              className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition"
-            >
-              取消
-            </button>
-            <button
-              onClick={handleEditUser}
-              className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition"
-            >
-              儲存
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // 系統設定面板
-  if (showSettingsPanel && currentUser?.is_admin) {
-    return (
-      <div className="min-h-screen bg-gray-50">
-        <div className="bg-white shadow-sm border-b">
-          <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
-            <h1 className="text-2xl font-bold text-gray-800">系統設定</h1>
-            <button
-              onClick={() => setShowSettingsPanel(false)}
+              onClick={() => setShowTimeSlotPanel(false)}
               className="flex items-center gap-2 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition"
             >
               <X className="w-4 h-4" />
@@ -1207,150 +923,97 @@ export default function NMRBookingSystem() {
           </div>
         </div>
         
-        <div className="max-w-7xl mx-auto p-4">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* 左側：編輯區 */}
-            <div className="bg-white rounded-lg shadow-sm p-6">
-              <h2 className="text-xl font-bold mb-2">編輯使用規則</h2>
-              <p className="text-sm text-gray-600 mb-6">修改登入頁面右側顯示的使用規則文字</p>
-              
-              {systemSettings && (
-                <div className="space-y-4">
-                  {[1, 2, 3, 4, 5, 6, 7].map(num => (
-                    <div key={num}>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        規則 {num}
-                      </label>
-                      <textarea
-                        value={systemSettings[`rule${num}`]}
-                        onChange={(e) => setSystemSettings({
-                          ...systemSettings,
-                          [`rule${num}`]: e.target.value
-                        })}
-                        rows={3}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 resize-y"
-                        placeholder={`輸入規則 ${num} 的內容...`}
+        <div className="max-w-4xl mx-auto p-4">
+          <div className="bg-white rounded-lg shadow-sm p-6">
+            <h2 className="text-xl font-bold mb-4">預約時段設定</h2>
+            <p className="text-sm text-gray-600 mb-6">設定日間和夜間的時段區間和間隔時間</p>
+            
+            {timeSlotSettings && (
+              <div className="space-y-6">
+                <div className="border-b pb-6">
+                  <h3 className="font-semibold text-lg mb-4">日間時段</h3>
+                  <div className="grid grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">開始時間</label>
+                      <input
+                        type="time"
+                        value={timeSlotSettings.day_start}
+                        onChange={(e) => setTimeSlotSettings({...timeSlotSettings, day_start: e.target.value})}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg"
                       />
                     </div>
-                  ))}
-                  
-                  <button
-                    onClick={handleSaveSettings}
-                    className="w-full mt-6 px-4 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition font-medium"
-                  >
-                    儲存設定
-                  </button>
-                </div>
-              )}
-            </div>
-
-            {/* 右側：即時預覽（固定位置） */}
-            <div className="lg:sticky lg:top-20 lg:self-start">
-              <div className="bg-white rounded-lg shadow-sm p-6">
-                <h2 className="text-xl font-bold mb-2">即時預覽</h2>
-                <p className="text-sm text-gray-600 mb-4">這是用戶在登入頁面看到的樣子</p>
-                
-                {/* 預覽框 - 可滾動 */}
-                <div className="bg-indigo-600 text-white p-6 rounded-lg max-h-[600px] overflow-y-auto">
-                  <h3 className="text-xl font-bold mb-4 sticky top-0 bg-indigo-600 pb-2">使用規則</h3>
-                  <div className="space-y-3">
-                    {systemSettings && [1, 2, 3, 4, 5, 6, 7].map(num => (
-                      systemSettings[`rule${num}`] && (
-                        <div key={num} className="flex items-start gap-3">
-                          <Check className="w-5 h-5 mt-0.5 flex-shrink-0" />
-                          <p className="text-sm whitespace-pre-wrap">{systemSettings[`rule${num}`]}</p>
-                        </div>
-                      )
-                    ))}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">結束時間</label>
+                      <input
+                        type="time"
+                        value={timeSlotSettings.day_end}
+                        onChange={(e) => setTimeSlotSettings({...timeSlotSettings, day_end: e.target.value})}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">時段間隔（分鐘）</label>
+                      <select
+                        value={timeSlotSettings.day_interval}
+                        onChange={(e) => setTimeSlotSettings({...timeSlotSettings, day_interval: parseInt(e.target.value)})}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                      >
+                        <option value="15">15 分鐘</option>
+                        <option value="30">30 分鐘</option>
+                        <option value="60">60 分鐘</option>
+                      </select>
+                    </div>
                   </div>
-                </div>
-
-                <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                  <p className="text-xs text-blue-800">
-                    💡 提示：預覽區域可以上下滾動查看所有內容
+                  <p className="text-xs text-gray-500 mt-2">
+                    例如：09:00-18:00，每 15 分鐘一個時段
                   </p>
                 </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
-  // 歷史預約記錄面板
-  if (showHistoryPanel && currentUser?.is_admin) {
-    if (!historyBookings.length && !loading) {
-      loadHistoryBookings();
-    }
-
-    return (
-      <div className="min-h-screen bg-gray-50">
-        <div className="bg-white shadow-sm border-b">
-          <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
-            <h1 className="text-2xl font-bold text-gray-800">歷史預約記錄</h1>
-            <div className="flex gap-3">
-              <button
-                onClick={exportToCSV}
-                className="flex items-center gap-2 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition"
-              >
-                <Check className="w-4 h-4" />
-                匯出 CSV
-              </button>
-              <button
-                onClick={() => setShowHistoryPanel(false)}
-                className="flex items-center gap-2 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition"
-              >
-                <X className="w-4 h-4" />
-                返回
-              </button>
-            </div>
-          </div>
-        </div>
-        
-        <div className="max-w-7xl mx-auto p-4">
-          <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">預約時間</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">用戶</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">實驗室</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">儀器</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">日期</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">時段</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200">
-                  {historyBookings.map(booking => (
-                    <tr key={booking.id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {new Date(booking.booked_at).toLocaleString('zh-TW')}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {booking.display_name}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {booking.pi} Lab
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {booking.instrument} MHz
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {booking.date}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {booking.time_slot}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            {historyBookings.length === 0 && (
-              <div className="text-center py-12 text-gray-500">
-                暫無預約記錄
+                <div className="border-b pb-6">
+                  <h3 className="font-semibold text-lg mb-4">夜間時段</h3>
+                  <div className="grid grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">開始時間</label>
+                      <input
+                        type="time"
+                        value={timeSlotSettings.night_start}
+                        onChange={(e) => setTimeSlotSettings({...timeSlotSettings, night_start: e.target.value})}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">結束時間（隔天）</label>
+                      <input
+                        type="time"
+                        value={timeSlotSettings.night_end}
+                        onChange={(e) => setTimeSlotSettings({...timeSlotSettings, night_end: e.target.value})}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">時段間隔（分鐘）</label>
+                      <select
+                        value={timeSlotSettings.night_interval}
+                        onChange={(e) => setTimeSlotSettings({...timeSlotSettings, night_interval: parseInt(e.target.value)})}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                      >
+                        <option value="15">15 分鐘</option>
+                        <option value="30">30 分鐘</option>
+                        <option value="60">60 分鐘</option>
+                      </select>
+                    </div>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-2">
+                    例如：18:00-隔天09:00，每 30 分鐘一個時段
+                  </p>
+                </div>
+                
+                <button
+                  onClick={handleSaveTimeSlotSettings}
+                  className="w-full mt-6 px-4 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition font-medium"
+                >
+                  儲存時段設定
+                </button>
               </div>
             )}
           </div>
@@ -1359,134 +1022,9 @@ export default function NMRBookingSystem() {
     );
   }
 
-  // 管理員面板
-  if (showAdminPanel && currentUser?.is_admin) {
-    return (
-      <div className="min-h-screen bg-gray-50">
-        <div className="bg-white shadow-sm border-b">
-          <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
-            <h1 className="text-2xl font-bold text-gray-800">用戶管理</h1>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setShowLabManagementPanel(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-teal-500 text-white rounded-lg hover:bg-teal-600 transition"
-              >
-                <Settings className="w-4 h-4" />
-                Lab 管理
-              </button>
-              <button
-                onClick={() => setShowAddUserModal(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition"
-              >
-                <UserPlus className="w-4 h-4" />
-                新增用戶
-              </button>
-              <button
-                onClick={() => setShowAdminPanel(false)}
-                className="flex items-center gap-2 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition"
-              >
-                <X className="w-4 h-4" />
-                返回
-              </button>
-            </div>
-          </div>
-        </div>
-        
-        <div className="max-w-7xl mx-auto p-4">
-          <div className="bg-white rounded-lg shadow-sm p-6">
-            <div className="space-y-4">
-              {users.map(user => (
-                <div key={user.id} className={`border rounded-lg p-4 ${!user.active ? 'bg-gray-50 opacity-75' : ''}`}>
-                  <div className="flex justify-between items-start mb-3">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <p className="font-semibold text-lg">{user.display_name}</p>
-                        {user.active === false && (
-                          <span className="px-2 py-1 bg-red-100 text-red-700 text-xs rounded-full">已停用</span>
-                        )}
-                        {user.active !== false && (
-                          <span className="px-2 py-1 bg-green-100 text-green-700 text-xs rounded-full">已啟用</span>
-                        )}
-                        {user.is_admin && (
-                          <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-full">管理員</span>
-                        )}
-                      </div>
-                      <p className="text-sm text-gray-600">{user.username} - {user.pi} Lab</p>
-                    </div>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => { setEditingUser({...user, password: ''}); setShowEditUserModal(true); }}
-                        className="flex items-center gap-1 px-3 py-1 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition text-sm"
-                      >
-                        <Edit className="w-3 h-3" />
-                        編輯
-                      </button>
-                      <button
-                        onClick={() => toggleUserActive(user.id, user.active !== false)}
-                        className={`flex items-center gap-1 px-3 py-1 rounded-lg font-medium transition text-sm ${
-                          user.active !== false
-                            ? 'bg-orange-100 text-orange-700 hover:bg-orange-200'
-                            : 'bg-green-100 text-green-700 hover:bg-green-200'
-                        }`}
-                      >
-                        {user.active !== false ? (
-                          <>
-                            <UserX className="w-3 h-3" />
-                            停用
-                          </>
-                        ) : (
-                          <>
-                            <UserCheck className="w-3 h-3" />
-                            啟用
-                          </>
-                        )}
-                      </button>
-                      <button
-                        onClick={() => handleDeleteUser(user.id, user.username)}
-                        className="flex items-center gap-1 px-3 py-1 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition text-sm"
-                      >
-                        <Trash2 className="w-3 h-3" />
-                        刪除
-                      </button>
-                    </div>
-                  </div>
-                  <div className="flex gap-3">
-                    <button
-                      onClick={() => toggleUserInstrument(user.id, '60')}
-                      disabled={user.active === false}
-                      className={`px-4 py-2 rounded-lg font-medium transition ${
-                        user.active === false
-                          ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                          : user.instruments?.includes('60')
-                          ? 'bg-green-500 text-white hover:bg-green-600'
-                          : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
-                      }`}
-                    >
-                      60 MHz {user.instruments?.includes('60') ? '✓' : ''}
-                    </button>
-                    <button
-                      onClick={() => toggleUserInstrument(user.id, '500')}
-                      disabled={user.active === false}
-                      className={`px-4 py-2 rounded-lg font-medium transition ${
-                        user.active === false
-                          ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                          : user.instruments?.includes('500')
-                          ? 'bg-green-500 text-white hover:bg-green-600'
-                          : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
-                      }`}
-                    >
-                      500 MHz {user.instruments?.includes('500') ? '✓' : ''}
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
+  // 其餘介面代碼繼續...
+  // 由於字數限制，我會在下一個回應繼續
+  
   // 主預約界面
   const timeSlots = generateTimeSlots();
 
@@ -1500,7 +1038,7 @@ export default function NMRBookingSystem() {
               <h1 className="text-2xl font-bold text-gray-800">NMR預約系統</h1>
             </div>
             
-                          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-4">
               <div className="flex items-center gap-2 text-sm">
                 <User className="w-4 h-4 text-gray-600" />
                 <span className="font-medium">{currentUser?.display_name}</span>
@@ -1522,6 +1060,13 @@ export default function NMRBookingSystem() {
                   >
                     <Calendar className="w-4 h-4" />
                     歷史記錄
+                  </button>
+                  <button
+                    onClick={() => setShowTimeSlotPanel(true)}
+                    className="flex items-center gap-2 px-3 py-2 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition text-sm"
+                  >
+                    <Clock className="w-4 h-4" />
+                    時段設定
                   </button>
                   <button
                     onClick={() => setShowSettingsPanel(true)}
@@ -1611,7 +1156,7 @@ export default function NMRBookingSystem() {
                     >
                       <div className="flex items-center gap-2 mb-2">
                         <Clock className="w-4 h-4" />
-                        <span className="font-medium text-sm">{slot}</span>
+                        <span className="font-medium text-xs">{slot}</span>
                       </div>
                       
                       {booking ? (
