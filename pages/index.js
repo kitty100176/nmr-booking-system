@@ -570,7 +570,6 @@ export default function NMRBookingSystem() {
     }
 
     try {
-      // **移除：刪除預約記錄的邏輯**
       // 保持原樣：只刪除用戶帳號
       const { error } = await supabase
         .from('users')
@@ -616,7 +615,7 @@ export default function NMRBookingSystem() {
     }
   };
   
-  // 處理資料清理 (Data Maintenance) 函式 - 僅刪除預約記錄
+  // 處理資料清理 (Data Maintenance) 函式 - 刪除舊預約記錄並刪除無記錄的用戶
   const handleCleanupData = async (cutoffYear) => {
     if (!currentUser?.is_admin || !cutoffYear) {
       showTempNotification('清理失敗', '請選擇要清理的截止年份。', 'error');
@@ -627,23 +626,61 @@ export default function NMRBookingSystem() {
     const cutoffDate = new Date(Number(cutoffYear) + 1, 0, 1); 
     const cutoffDateString = cutoffDate.toISOString().split('T')[0];
     
-    if (!window.confirm(`🚨 確定要刪除所有早於 ${cutoffYear} 年底的預約記錄嗎？此操作不可逆。`)) {
+    if (!window.confirm(`🚨 確定要刪除所有早於 ${cutoffYear} 年底的預約記錄，並刪除所有已無任何預約記錄的非管理員帳號嗎？此操作不可逆。`)) {
       return;
     }
 
     setLoading(true);
+    let deletedBookingsCount = 0;
+    let deletedUsersCount = 0;
 
     try {
       // 1. 刪除所有早於截止日期的預約記錄
-      const { count: deletedBookingsCount, error: bookingError } = await supabase
+      const { count: bCount, error: bookingError } = await supabase
         .from('bookings')
         .delete({ count: 'exact' }) 
         .lt('date', cutoffDateString);
 
       if (bookingError) throw bookingError;
+      deletedBookingsCount = bCount || 0;
+
+      // 2. 找出所有用戶
+      const { data: allUsers, error: usersError } = await supabase.from('users').select('id, username, is_admin').eq('is_admin', false);
+      if (usersError) throw usersError;
+
+      const nonAdminUsers = allUsers || [];
       
-      showTempNotification('資料清理完成！', `已刪除 ${deletedBookingsCount || 0} 筆早於 ${cutoffYear} 年底的預約記錄。`, 'success');
-      loadBookings(); // 重新載入預約
+      // 3. 檢查每個非管理員用戶是否還有任何預約記錄 (複雜：需要多次查詢)
+      const usersToDelete = [];
+      for (const user of nonAdminUsers) {
+          const { data: remainingBookings, error: checkError } = await supabase
+              .from('bookings')
+              .select('id', { count: 'exact', head: true })
+              .eq('username', user.username);
+          
+          if (checkError) throw checkError;
+
+          // 如果該用戶在 bookings 表中沒有任何剩餘記錄，則標記為刪除
+          // 這意味著他們的預約歷史已經被清空，且之後也沒有新的預約
+          if (remainingBookings.length === 0) {
+              usersToDelete.push(user.id);
+          }
+      }
+
+      // 4. 執行帳號刪除
+      if (usersToDelete.length > 0) {
+          const { count: uCount, error: deleteError } = await supabase
+              .from('users')
+              .delete({ count: 'exact' })
+              .in('id', usersToDelete);
+          
+          if (deleteError) throw deleteError;
+          deletedUsersCount = uCount || 0;
+      }
+      
+      showTempNotification('資料清理完成！', `已刪除 ${deletedBookingsCount} 筆舊記錄，並清理 ${deletedUsersCount} 個已無記錄的用戶帳號。`, 'success');
+      loadBookings(); 
+      loadUsers(); // 重新載入用戶列表
 
     } catch (error) {
       console.error('資料清理失敗:', error);
@@ -653,155 +690,521 @@ export default function NMRBookingSystem() {
     }
   };
 
-  // ===============================================
-  // 輔助 UI 渲染組件
-  // ===============================================
 
-  // 管理員面板：時段設定 (TimeSlotSettingsPanel)
-  const TimeSlotSettingsPanel = () => {
-    if (!timeSlotSettings) return <p className="text-gray-500">載入中...</p>;
+  // -----------------------------------------------------
+  // Admin Panel Sub-Component Implementations
+  // -----------------------------------------------------
 
-    const handleChange = (e) => {
-      const { name, value } = e.target;
-      setTimeSlotSettings(prev => ({ ...prev, [name]: (name.includes('interval')) ? Number(value) : value }));
+  // UI: 新增用戶 Modal
+  const AddUserModal = () => {
+    const toggleInstrument = (instrument) => {
+        const current = newUserForm.instruments;
+        if (current.includes(instrument)) {
+            setNewUserForm({ ...newUserForm, instruments: current.filter(i => i !== instrument) });
+        } else {
+            setNewUserForm({ ...newUserForm, instruments: [...current, instrument] });
+        }
     };
-
-    // 產生年份選項：從當前年份回溯 5 年
-    const years = [];
-    for (let y = currentYear - 1; y >= currentYear - 5; y--) {
-      years.push(y);
-    }
-
+    
     return (
-      <div className="bg-white p-6 rounded-lg shadow-xl space-y-6">
-        <h2 className="text-2xl font-bold text-gray-800 flex items-center"><Clock className="mr-2 h-6 w-6" />時段設定</h2>
-        <p className="text-sm text-gray-600">在此調整每日時段劃分粒度。</p>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 border-t pt-4">
-          {/* 日間設定 */}
-          <div className="space-y-4 bg-gray-50 p-4 rounded-lg">
-            <h3 className="text-lg font-semibold text-indigo-700">日間時段 (Day Period)</h3>
-            <div className="flex space-x-4">
-                <InputGroup label="起始時間" name="day_start" value={timeSlotSettings.day_start} onChange={handleChange} type="time" />
-                <InputGroup label="結束時間" name="day_end" value={timeSlotSettings.day_end} onChange={handleChange} type="time" />
-            </div>
-            <InputGroup label="時間粒度 (分鐘)" name="day_interval" value={timeSlotSettings.day_interval} onChange={handleChange} type="number" min="1" step="1" />
-          </div>
-
-          {/* 夜間設定 */}
-          <div className="space-y-4 bg-gray-50 p-4 rounded-lg">
-            <h3 className="text-lg font-semibold text-indigo-700">夜間時段 (Night Period)</h3>
-            <div className="flex space-x-4">
-                <InputGroup label="起始時間" name="night_start" value={timeSlotSettings.night_start} onChange={handleChange} type="time" />
-                <InputGroup label="結束時間" name="night_end" value={timeSlotSettings.night_end} onChange={handleChange} type="time" />
-            </div>
-            <InputGroup label="時間粒度 (分鐘)" name="night_interval" value={timeSlotSettings.night_interval} onChange={handleChange} type="number" min="1" step="1" />
-          </div>
-        </div>
-
-        <div className="flex justify-end pt-4">
-          <button
-            onClick={handleUpdateTimeSlotSettings}
-            className="px-6 py-2 bg-green-600 text-white font-semibold rounded-lg shadow hover:bg-green-700 transition flex items-center"
-            disabled={loading}
-          >
-            <Save className="mr-2 h-5 w-5" />
-            {loading ? '儲存中...' : '儲存時段設定'}
-          </button>
-        </div>
-        
-        {/* 資料清理區塊 */}
-        <div className="border-t pt-6 mt-6 border-red-300 space-y-4 bg-red-50 p-4 rounded-lg">
-            <h3 className="text-lg font-bold text-red-800 flex items-center">
-                <Database className="mr-2 h-6 w-6" /> 歷史預約記錄清理
-            </h3>
-            <p className="text-sm text-red-700">
-                此操作將 **永久刪除** 所有早於所選年份底部的預約記錄。帳號不會被刪除。
-                請謹慎選擇。
-            </p>
-            
-            <div className="flex items-center space-x-4">
-                <label htmlFor="cleanupYear" className="text-sm font-medium text-gray-700">
-                    刪除截止年份：
-                </label>
-                <select
-                    id="cleanupYear"
-                    value={cleanupYear}
-                    onChange={(e) => setCleanupYear(Number(e.target.value))}
-                    className="mt-1 block w-40 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2 border"
-                >
-                    <option value="">請選擇年份</option>
-                    {years.map(year => (
-                        <option key={year} value={year}>早於 {year} 年底</option>
-                    ))}
-                </select>
-            </div>
-
-            <button
-                onClick={() => handleCleanupData(cleanupYear)}
-                className="w-full px-6 py-3 bg-red-600 text-white font-bold rounded-lg shadow-md hover:bg-red-700 transition flex items-center justify-center"
-                disabled={loading || !cleanupYear}
-            >
-                <Trash2 className="mr-2 h-5 w-5" />
-                {loading ? '清理中...' : `執行清理 (刪除早於 ${cleanupYear} 年底的數據)`}
-            </button>
-        </div>
-
-      </div>
-    );
-  };
-  
-  // ===============================================
-  // 主渲染區塊
-  // ===============================================
-
-  // 登入畫面
-  if (!isLoggedIn) {
-     return (
-        <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4 font-sans">
-            <div className="bg-white p-8 rounded-xl shadow-2xl w-full max-w-md">
-                <h2 className="text-3xl font-bold text-center text-indigo-700 mb-6 flex items-center justify-center">
-                    <Calendar className="mr-3 h-7 w-7" /> NMR 預約系統
-                </h2>
-                <form onSubmit={(e) => { e.preventDefault(); handleLogin(); }} className="space-y-4">
-                    <InputGroup 
-                        label="使用者名稱" 
-                        name="username" 
-                        value={loginForm.username} 
-                        onChange={(e) => setLoginForm({ ...loginForm, username: e.target.value })} 
-                        placeholder="請輸入帳號"
-                    />
-                    <InputGroup 
-                        label="密碼" 
-                        name="password" 
-                        value={loginForm.password} 
-                        onChange={(e) => setLoginForm({ ...loginForm, password: e.target.value })} 
-                        type="password" 
-                        placeholder="請輸入密碼"
-                    />
-                    <button
-                        type="submit"
-                        className="w-full py-3 bg-indigo-600 text-white font-semibold rounded-lg shadow-lg hover:bg-indigo-700 transition"
-                        disabled={loading}
-                    >
-                        {loading ? '登入中...' : '登入 Login'}
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
+                <div className="flex justify-between items-center mb-6">
+                    <h2 className="text-2xl font-bold text-gray-800">新增用戶</h2>
+                    <button onClick={() => setShowAddUserModal(false)} className="text-gray-500 hover:text-gray-700">
+                        <X className="w-6 h-6" />
                     </button>
-                </form>
-                {/* 顯示系統規則 (精簡版) */}
-                <div className="mt-8 p-4 bg-gray-50 rounded-lg border border-gray-200">
-                    <h3 className="text-md font-semibold text-gray-700 mb-2">使用規則重點：</h3>
-                    <ul className="text-sm text-gray-600 space-y-1">
-                        {systemSettings && systemSettings.rule1 && <li>• {systemSettings.rule1}</li>}
-                        {systemSettings && systemSettings.rule2 && <li>• {systemSettings.rule2}</li>}
-                        {systemSettings && systemSettings.rule3 && <li>• {systemSettings.rule3}</li>}
-                        <li className="text-xs text-indigo-500 mt-2">請登入系統查看完整規則...</li>
-                    </ul>
+                </div>
+
+                <div className="space-y-4">
+                    <InputGroup label="帳號 *" name="username" value={newUserForm.username} onChange={(e) => setNewUserForm({...newUserForm, username: e.target.value})} placeholder="例如：chen123" />
+                    <InputGroup label="密碼 *" name="password" value={newUserForm.password} onChange={(e) => setNewUserForm({...newUserForm, password: e.target.value})} placeholder="設定密碼" />
+                    <InputGroup label="顯示名稱 *" name="display_name" value={newUserForm.display_name} onChange={(e) => setNewUserForm({...newUserForm, display_name: e.target.value})} placeholder="例如：陳小明" />
+
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Lab 名稱 *</label>
+                        <select
+                            value={newUserForm.pi}
+                            onChange={(e) => setNewUserForm({...newUserForm, pi: e.target.value})}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                        >
+                            <option value="">請選擇 Lab</option>
+                            {labs.map(lab => (
+                                <option key={lab.id} value={lab.name}>{lab.name} {lab.description && `(${lab.description})`}</option>
+                            ))}
+                        </select>
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">儀器權限</label>
+                        <div className="flex gap-3">
+                            {INSTRUMENTS.map(instrument => (
+                                <button
+                                    key={instrument}
+                                    type="button"
+                                    onClick={() => toggleInstrument(instrument)}
+                                    className={`px-4 py-2 rounded-lg font-medium transition ${
+                                        newUserForm.instruments.includes(instrument)
+                                            ? 'bg-green-500 text-white'
+                                            : 'bg-gray-200 text-gray-600'
+                                    }`}
+                                >
+                                    {instrument} MHz {newUserForm.instruments.includes(instrument) ? '✓' : ''}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                        <input
+                            type="checkbox"
+                            id="is_admin"
+                            checked={newUserForm.is_admin}
+                            onChange={(e) => setNewUserForm({...newUserForm, is_admin: e.target.checked})}
+                            className="w-4 h-4 text-indigo-600 rounded"
+                        />
+                        <label htmlFor="is_admin" className="text-sm text-gray-700">設為管理員</label>
+                    </div>
+                </div>
+
+                <div className="flex gap-3 mt-6">
+                    <button
+                        onClick={() => setShowAddUserModal(false)}
+                        className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition"
+                    >
+                        取消
+                    </button>
+                    <button
+                        onClick={handleAddUser}
+                        className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition"
+                    >
+                        新增
+                    </button>
                 </div>
             </div>
         </div>
     );
-  }
+  };
+  
+  // UI: 編輯用戶 Modal
+  const EditUserModal = () => {
+    if (!editingUser) return null;
+    return (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
+                <div className="flex justify-between items-center mb-6">
+                    <h2 className="text-2xl font-bold text-gray-800">編輯用戶</h2>
+                    <button onClick={() => { setShowEditUserModal(false); setEditingUser(null); }} className="text-gray-500 hover:text-gray-700">
+                        <X className="w-6 h-6" />
+                    </button>
+                </div>
 
+                <div className="space-y-4">
+                    <InputGroup label="帳號" name="username" value={editingUser.username} disabled />
+                    <InputGroup 
+                        label="新密碼（留空表示不修改）" 
+                        name="password" 
+                        value={editingUser.password || ''} 
+                        onChange={(e) => setEditingUser({...editingUser, password: e.target.value})} 
+                        placeholder="輸入新密碼或留空"
+                    />
+                    <InputGroup label="顯示名稱 *" name="display_name" value={editingUser.display_name} onChange={(e) => setEditingUser({...editingUser, display_name: e.target.value})} />
+                    
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Lab 名稱 *</label>
+                        <select
+                            value={editingUser.pi}
+                            onChange={(e) => setEditingUser({...editingUser, pi: e.target.value})}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                        >
+                            <option value="">請選擇 Lab</option>
+                            {labs.map(lab => (
+                                <option key={lab.id} value={lab.name}>{lab.name} {lab.description && `(${lab.description})`}</option>
+                            ))}
+                        </select>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                        <input
+                            type="checkbox"
+                            id="edit_is_admin"
+                            checked={editingUser.is_admin}
+                            onChange={(e) => setEditingUser({...editingUser, is_admin: e.target.checked})}
+                            className="w-4 h-4 text-indigo-600 rounded"
+                        />
+                        <label htmlFor="edit_is_admin" className="text-sm text-gray-700">設為管理員</label>
+                    </div>
+                </div>
+
+                <div className="flex gap-3 mt-6">
+                    <button
+                        onClick={() => { setShowEditUserModal(false); setEditingUser(null); }}
+                        className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition"
+                    >
+                        取消
+                    </button>
+                    <button
+                        onClick={handleEditUser}
+                        className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition"
+                    >
+                        儲存
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+  };
+
+  // UI: 用戶管理面板
+  const UserManagementPanel = () => {
+    const toggleUserInstrument = async (userId, instrument) => {
+        const user = users.find(u => u.id === userId);
+        if (!user) return;
+
+        let newInstruments = [...(user.instruments || [])];
+        
+        if (newInstruments.includes(instrument)) {
+            newInstruments = newInstruments.filter(i => i !== instrument);
+        } else {
+            newInstruments.push(instrument);
+        }
+
+        try {
+            const { error } = await supabase
+                .from('users')
+                .update({ instruments: newInstruments })
+                .eq('id', userId);
+
+            if (error) throw error;
+            loadUsers();
+            showTempNotification('權限更新', '用戶儀器權限已更新。', 'info');
+        } catch (error) {
+            console.error('更新權限失敗:', error);
+            showTempNotification('更新失敗', '更新儀器權限失敗。', 'error');
+        }
+    };
+    
+    const toggleUserActive = async (userId, currentActive) => {
+        try {
+            const { error } = await supabase
+                .from('users')
+                .update({ active: !currentActive })
+                .eq('id', userId);
+
+            if (error) throw error;
+            loadUsers();
+            showTempNotification('狀態更新', currentActive ? '帳號已停用' : '帳號已啟用', 'info');
+        } catch (error) {
+            console.error('更新狀態失敗:', error);
+            showTempNotification('更新失敗', '更新帳號狀態失敗。', 'error');
+        }
+    };
+
+    return (
+        <div className="bg-white p-6 rounded-lg shadow-xl space-y-4">
+            <div className="flex justify-between items-center">
+                <h2 className="text-2xl font-bold text-gray-800 flex items-center"><UserPlus className="mr-2 h-6 w-6" /> 用戶管理</h2>
+                <button
+                    onClick={() => setShowAddUserModal(true)}
+                    className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition text-sm"
+                >
+                    <UserPlus className="w-4 h-4" />
+                    新增用戶
+                </button>
+            </div>
+            
+            <div className="space-y-4">
+                {users.map(user => (
+                    <div key={user.id} className={`border rounded-lg p-4 ${!user.active ? 'bg-gray-50 opacity-75' : 'bg-white'}`}>
+                        <div className="flex justify-between items-start mb-3">
+                            <div className="flex-1">
+                                <div className="flex items-center gap-2">
+                                    <p className="font-semibold text-lg">{user.display_name}</p>
+                                    {user.active === false && (<span className="px-2 py-1 bg-red-100 text-red-700 text-xs rounded-full">已停用</span>)}
+                                    {user.active !== false && (<span className="px-2 py-1 bg-green-100 text-green-700 text-xs rounded-full">已啟用</span>)}
+                                    {user.is_admin && (<span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-full">管理員</span>)}
+                                </div>
+                                <p className="text-sm text-gray-600">{user.username} - {user.pi} Lab</p>
+                            </div>
+                            <div className="flex gap-2 flex-wrap">
+                                <button
+                                    onClick={() => { setEditingUser({ ...user, password: '' }); setShowEditUserModal(true); }}
+                                    className="flex items-center gap-1 px-3 py-1 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition text-sm"
+                                >
+                                    <Edit className="w-3 h-3" /> 編輯
+                                </button>
+                                <button
+                                    onClick={() => toggleUserActive(user.id, user.active !== false)}
+                                    className={`flex items-center gap-1 px-3 py-1 rounded-lg font-medium transition text-sm ${user.active !== false ? 'bg-orange-100 text-orange-700 hover:bg-orange-200' : 'bg-green-100 text-green-700 hover:bg-green-200'}`}
+                                >
+                                    {user.active !== false ? (<><UserX className="w-3 h-3" /> 停用</>) : (<><UserCheck className="w-3 h-3" /> 啟用</>)}
+                                </button>
+                                <button
+                                    onClick={() => handleDeleteUser(user.id, user.username)}
+                                    className="flex items-center gap-1 px-3 py-1 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition text-sm"
+                                >
+                                    <Trash2 className="w-3 h-3" /> 刪除
+                                </button>
+                            </div>
+                        </div>
+                        <div className="flex gap-3 pt-2 border-t">
+                            <span className="text-sm font-medium text-gray-700">儀器權限:</span>
+                            {INSTRUMENTS.map(instrument => (
+                                <button
+                                    key={instrument}
+                                    onClick={() => toggleUserInstrument(user.id, instrument)}
+                                    disabled={user.active === false}
+                                    className={`px-4 py-2 rounded-lg font-medium transition text-xs ${
+                                        user.active === false
+                                            ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                                            : user.instruments?.includes(instrument)
+                                                ? 'bg-green-500 text-white hover:bg-green-600'
+                                                : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
+                                    }`}
+                                >
+                                    {instrument} MHz {user.instruments?.includes(instrument) ? '✓' : ''}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                ))}
+            </div>
+            {(users.length === 0 && !loading) && (
+                 <div className="text-center py-8 text-gray-500">尚無用戶資料。</div>
+            )}
+        </div>
+    );
+  };
+  
+  // UI: Lab 管理面板
+  const LabManagementPanel = () => {
+    return (
+        <div className="bg-white p-6 rounded-lg shadow-xl space-y-4">
+            <div className="flex justify-between items-center">
+                <h2 className="text-2xl font-bold text-gray-800 flex items-center"><Database className="mr-2 h-6 w-6" /> Lab 管理</h2>
+                <button
+                    onClick={() => setShowAddLabModal(true)}
+                    className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition text-sm"
+                >
+                    <UserPlus className="w-4 h-4" /> 新增 Lab
+                </button>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {labs.map(lab => {
+                    const usersCount = users.filter(u => u.pi === lab.name).length;
+                    return (
+                        <div key={lab.id} className="border rounded-lg p-4 bg-gray-50">
+                            <div className="flex justify-between items-start mb-3">
+                                <div className="flex-1">
+                                    <p className="font-semibold text-lg">{lab.name}</p>
+                                    {lab.description && (<p className="text-sm text-gray-600">{lab.description}</p>)}
+                                    <p className="text-xs text-gray-500 mt-1">{usersCount} 個用戶使用中</p>
+                                </div>
+                            </div>
+                            <div className="flex gap-2">
+                                <button
+                                    onClick={() => { setEditingLab({ ...lab }); setShowEditLabModal(true); }}
+                                    className="flex-1 px-3 py-1 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition text-sm"
+                                >
+                                    編輯
+                                </button>
+                                <button
+                                    onClick={() => handleDeleteLab(lab.id, lab.name)}
+                                    disabled={usersCount > 0}
+                                    className={`flex-1 px-3 py-1 rounded-lg transition text-sm ${
+                                        usersCount > 0
+                                            ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                                            : 'bg-red-100 text-red-700 hover:bg-red-200'
+                                    }`}
+                                >
+                                    刪除
+                                </button>
+                            </div>
+                        </div>
+                    );
+                })}
+            </div>
+            {(labs.length === 0 && !loading) && (
+                <div className="text-center py-8 text-gray-500">尚無 Lab 資料。</div>
+            )}
+        </div>
+    );
+  };
+
+  // UI: 歷史記錄面板
+  const HistoryPanel = () => {
+    // 匯出 CSV 邏輯
+    const exportToCSV = () => {
+        if (historyBookings.length === 0) {
+            showTempNotification('匯出失敗', '沒有資料可以匯出', 'error');
+            return;
+        }
+
+        const headers = ['預約時間', '用戶名稱', 'Lab', '儀器 (MHz)', '預約日期', '時段'];
+        
+        const csvContent = [
+            headers.join(','),
+            ...historyBookings.map(booking => [
+                `"${new Date(booking.booked_at).toLocaleString('zh-TW')}"`,
+                `"${booking.display_name}"`,
+                `"${booking.pi} Lab"`,
+                booking.instrument,
+                booking.date,
+                `"${booking.time_slot}"`
+            ].join(','))
+        ].join('\n');
+
+        const BOM = '\uFEFF';
+        const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
+        
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        link.setAttribute('href', url);
+        link.setAttribute('download', `預約記錄_${selectedMonth}.csv`);    
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        showTempNotification('匯出成功', '預約記錄已下載。', 'success');
+    };
+    
+    return (
+        <div className="bg-white p-6 rounded-lg shadow-xl space-y-4">
+            <div className="flex justify-between items-center">
+                <h2 className="text-2xl font-bold text-gray-800 flex items-center"><Calendar className="mr-2 h-6 w-6" /> 歷史預約記錄</h2>
+                <button
+                    onClick={exportToCSV}
+                    disabled={historyBookings.length === 0}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg transition text-sm ${
+                        historyBookings.length === 0
+                            ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                            : 'bg-green-600 text-white hover:bg-green-700'
+                    }`}
+                >
+                    <Upload className="w-4 h-4" /> 匯出 CSV
+                </button>
+            </div>
+
+            {/* 月份選擇器 */}
+            <div className="flex items-center gap-4 bg-gray-50 p-3 rounded-lg border">
+                <label className="text-sm font-medium text-gray-700">選擇月份：</label>
+                <input
+                    type="month"
+                    value={selectedMonth}
+                    onChange={(e) => setSelectedMonth(e.target.value)}
+                    className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                />
+                <span className="text-sm text-gray-600">
+                    {historyBookings.length} 筆記錄
+                </span>
+            </div>
+
+            {/* 歷史記錄表格 */}
+            <div className="overflow-x-auto bg-white rounded-lg shadow-sm border">
+                <table className="w-full whitespace-nowrap">
+                    <thead className="bg-gray-50 sticky top-0">
+                        <tr>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">預約時間</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">用戶</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">實驗室</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">儀器</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">日期</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">時段</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                        {historyBookings.map(booking => (
+                            <tr key={booking.id} className="hover:bg-gray-50">
+                                <td className="px-6 py-4 text-sm text-gray-900">
+                                    {new Date(booking.booked_at).toLocaleString('zh-TW')}
+                                </td>
+                                <td className="px-6 py-4 text-sm text-gray-900">
+                                    {booking.display_name}
+                                </td>
+                                <td className="px-6 py-4 text-sm text-gray-500">
+                                    {booking.pi} Lab
+                                </td>
+                                <td className="px-6 py-4 text-sm text-gray-500">
+                                    {booking.instrument} MHz
+                                </td>
+                                <td className="px-6 py-4 text-sm text-gray-500">
+                                    {booking.date}
+                                </td>
+                                <td className="px-6 py-4 text-sm text-gray-500">
+                                    {booking.time_slot}
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+            {historyBookings.length === 0 && (
+                <div className="text-center py-12 text-gray-500 border rounded-lg">
+                    {selectedMonth ? `${selectedMonth} 無預約記錄` : '請選擇月份查看記錄'}
+                </div>
+            )}
+        </div>
+    );
+  };
+  
+  // UI: 系統規則面板
+  const SettingsPanel = () => {
+    const handleSaveSettings = async () => {
+        if (!systemSettings) return;
+
+        try {
+            const { error } = await supabase
+                .from('system_settings')
+                .upsert([{ id: 1, ...systemSettings }], { onConflict: 'id' });
+
+            if (error) throw error;
+            showTempNotification('設定已儲存！', '使用規則已更新。', 'success');
+        } catch (error) {
+            console.error('儲存設定失敗:', error);
+            showTempNotification('儲存失敗', '更新系統規則失敗。', 'error');
+        }
+    };
+
+    return (
+        <div className="bg-white p-6 rounded-lg shadow-xl space-y-6">
+            <h2 className="text-2xl font-bold text-gray-800 flex items-center"><Settings className="mr-2 h-6 w-6" /> 系統規則設定</h2>
+            <p className="text-sm text-gray-600">修改登入頁面右側顯示的使用規則文字。</p>
+
+            {systemSettings && (
+                <div className="space-y-4">
+                    {[1, 2, 3, 4, 5, 6, 7].map(num => (
+                        <div key={num}>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">規則 {num}</label>
+                            <textarea
+                                value={systemSettings[`rule${num}`]}
+                                onChange={(e) => setSystemSettings({ ...systemSettings, [`rule${num}`]: e.target.value })}
+                                rows={3}
+                                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 resize-y"
+                                placeholder={`輸入規則 ${num} 的內容...`}
+                            />
+                        </div>
+                    ))}
+                    
+                    <button
+                        onClick={handleSaveSettings}
+                        className="w-full mt-6 px-4 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition font-medium flex items-center justify-center"
+                        disabled={loading}
+                    >
+                        <Save className="mr-2 h-5 w-5" />
+                        {loading ? '儲存中...' : '儲存設定'}
+                    </button>
+                </div>
+            )}
+        </div>
+    );
+  };
+
+  // -----------------------------------------------------
+  // 其他 Modal UI (AddLab, EditLab) 已在上面定義
+  // -----------------------------------------------------
+
+  // ... (主渲染邏輯) ...
 
   return (
     <div className="min-h-screen bg-gray-100 p-4 sm:p-8 font-sans">
@@ -821,7 +1224,7 @@ export default function NMRBookingSystem() {
           {currentUser?.is_admin && (
             <>
                 <button
-                    onClick={() => setShowTimeSlotPanel(true)}
+                    onClick={() => {setShowAdminPanel(true); setShowTimeSlotPanel(true);}} // 點擊設置按鈕時，打開 Admin Modal 並預設顯示 TimeSlot/Cleanup
                     className="hidden sm:inline-flex items-center gap-2 px-3 py-2 bg-yellow-100 text-yellow-700 rounded-lg hover:bg-yellow-200 transition text-sm"
                     title="時段與清理設定"
                 >
@@ -829,7 +1232,7 @@ export default function NMRBookingSystem() {
                     時段/清理
                 </button>
                 <button
-                    onClick={() => setShowAdminPanel(true)}
+                    onClick={() => {setShowAdminPanel(true); setShowTimeSlotPanel(false);}} // 點擊設置按鈕時，打開 Admin Modal 並預設顯示用戶管理
                     className="p-2 rounded-full text-white bg-indigo-600 hover:bg-indigo-700 transition"
                     title="管理員面板"
                 >
@@ -874,152 +1277,214 @@ export default function NMRBookingSystem() {
         </div>
       )}
 
-      {/* 主介面 - 儀器選擇與預約 */}
-      <div className="space-y-8">
-          {/* 選擇儀器與日期 */}
-          <div className="bg-white p-6 rounded-lg shadow-xl flex flex-col sm:flex-row items-center justify-between space-y-4 sm:space-y-0 sm:space-x-6">
-            <div className="w-full sm:w-1/3">
-              <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center">
-                <Clock className="mr-2 h-4 w-4" /> 選擇 NMR 儀器
-              </label>
-              <select
-                value={selectedInstrument}
-                onChange={(e) => {
-                    setSelectedInstrument(e.target.value);
-                    setBookings([]); // 清空預約列表直到新數據載入
-                }}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2 border"
-              >
-                <option value="">請選擇儀器</option>
-                {INSTRUMENTS.map(inst => {
-                    const hasPermission = currentUser?.instruments?.includes(inst) || currentUser?.is_admin;
-                    return (
-                        <option key={inst} value={inst} disabled={!hasPermission}>
-                            NMR-{inst} MHz {hasPermission ? '' : '(無權限)'}
-                        </option>
-                    );
-                })}
-              </select>
-            </div>
-            <div className="w-full sm:w-1/3">
-              <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center">
-                <Calendar className="mr-2 h-4 w-4" /> 選擇日期
-              </label>
-              <input
-                type="date"
-                value={selectedDate}
-                onChange={(e) => setSelectedDate(e.target.value)}
-                min={getTodayString()} // 限制最小日期為今天
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2 border"
-              />
-            </div>
-            <div className="w-full sm:w-1/3 pt-6">
-              <button
-                onClick={loadBookings}
-                className="w-full py-2 bg-indigo-600 text-white font-semibold rounded-lg shadow hover:bg-indigo-700 transition flex items-center justify-center"
-                disabled={!selectedInstrument || !selectedDate || loading}
-              >
-                {loading ? <Hourglass className="animate-spin mr-2 h-5 w-5" /> : <Upload className="mr-2 h-5 w-5" />}
-                {loading ? '載入中...' : '查看預約時段'}
-              </button>
-            </div>
-          </div>
-          
-          {/* 預約時段網格 */}
-          {selectedInstrument && selectedDate ? (
-            <div className="bg-white rounded-lg shadow-xl p-6">
-              <h2 className="text-2xl font-bold text-gray-800 mb-4">
-                NMR-{selectedInstrument}MHz - {selectedDate} 預約情況
-              </h2>
-              {loading ? (
-                <div className="text-center py-12 text-gray-500">
-                  <Hourglass className="animate-spin mx-auto h-8 w-8" />
-                  <p className="mt-2">正在載入時段...</p>
+      {/* 登入畫面 (如果未登入) */}
+      {!isLoggedIn && (
+        <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4 font-sans">
+            <div className="bg-white p-8 rounded-xl shadow-2xl w-full max-w-md">
+                <h2 className="text-3xl font-bold text-center text-indigo-700 mb-6 flex items-center justify-center">
+                    <Calendar className="mr-3 h-7 w-7" /> NMR 預約系統
+                </h2>
+                <form onSubmit={(e) => { e.preventDefault(); handleLogin(); }} className="space-y-4">
+                    <InputGroup 
+                        label="使用者名稱" 
+                        name="username" 
+                        value={loginForm.username} 
+                        onChange={(e) => setLoginForm({ ...loginForm, username: e.target.value })} 
+                        placeholder="請輸入帳號"
+                    />
+                    <InputGroup 
+                        label="密碼" 
+                        name="password" 
+                        value={loginForm.password} 
+                        onChange={(e) => setLoginForm({ ...loginForm, password: e.target.value })} 
+                        type="password" 
+                        placeholder="請輸入密碼"
+                    />
+                    <button
+                        type="submit"
+                        className="w-full py-3 bg-indigo-600 text-white font-semibold rounded-lg shadow-lg hover:bg-indigo-700 transition"
+                        disabled={loading}
+                    >
+                        {loading ? '登入中...' : '登入 Login'}
+                    </button>
+                </form>
+                {/* 顯示系統規則 (精簡版) */}
+                <div className="mt-8 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                    <h3 className="text-md font-semibold text-gray-700 mb-2">使用規則重點：</h3>
+                    <ul className="text-sm text-gray-600 space-y-1">
+                        {systemSettings && systemSettings.rule1 && <li>• {systemSettings.rule1}</li>}
+                        {systemSettings && systemSettings.rule2 && <li>• {systemSettings.rule2}</li>}
+                        {systemSettings && systemSettings.rule3 && <li>• {systemSettings.rule3}</li>}
+                        <li className="text-xs text-indigo-500 mt-2">請登入系統查看完整規則...</li>
+                    </ul>
                 </div>
-              ) : (
-                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 gap-3">
-                  {timeSlots.map(slot => {
-                    const booking = bookings.find(b => b.time_slot === slot);
-                    const [startTime, endTime] = slot.split('-');
-                    const isPast = new Date(`${selectedDate} ${startTime}`) < new Date();
-                    const isBooked = !!booking;
-                    const isMyBooking = isBooked && booking.user_id === currentUser.id;
-                    
-                    let bgColor = 'bg-green-100 hover:bg-green-200';
-                    let statusText = '可預約';
+            </div>
+        </div>
+    )}
 
-                    if (isPast) {
-                      bgColor = 'bg-gray-300 text-gray-600';
-                      statusText = '已過期';
-                    } else if (isMyBooking) {
-                      bgColor = 'bg-blue-500 text-white hover:bg-blue-600';
-                      statusText = '我的預約';
-                    } else if (isBooked) {
-                      bgColor = 'bg-red-400 text-white';
-                      statusText = '已被預約';
-                    }
-                    
-                    const canBook = !isBooked && !isPast;
-                    
-                    return (
-                      <div
-                        key={slot}
-                        className={`p-2 rounded-lg shadow-sm transition cursor-pointer flex flex-col justify-between items-center text-center text-sm border-2 ${isPast ? 'opacity-70 cursor-not-allowed' : ''} ${bgColor}`}
-                        onClick={() => canBook && handleBooking(slot)}
-                      >
-                        <p className="font-bold">{slot}</p>
+      {/* 主介面 (如果已登入) */}
+      {isLoggedIn && (
+        <div className="space-y-8">
+            {/* 選擇儀器與日期 */}
+            <div className="bg-white p-6 rounded-lg shadow-xl flex flex-col sm:flex-row items-center justify-between space-y-4 sm:space-y-0 sm:space-x-6">
+                <div className="w-full sm:w-1/3">
+                <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center">
+                    <Clock className="mr-2 h-4 w-4" /> 選擇 NMR 儀器
+                </label>
+                <select
+                    value={selectedInstrument}
+                    onChange={(e) => {
+                        setSelectedInstrument(e.target.value);
+                        setBookings([]); // 清空預約列表直到新數據載入
+                    }}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2 border"
+                >
+                    <option value="">請選擇儀器</option>
+                    {INSTRUMENTS.map(inst => {
+                        const hasPermission = currentUser?.instruments?.includes(inst) || currentUser?.is_admin;
+                        return (
+                            <option key={inst} value={inst} disabled={!hasPermission}>
+                                NMR-{inst} MHz {hasPermission ? '' : '(無權限)'}
+                            </option>
+                        );
+                    })}
+                </select>
+                </div>
+                <div className="w-full sm:w-1/3">
+                <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center">
+                    <Calendar className="mr-2 h-4 w-4" /> 選擇日期
+                </label>
+                <input
+                    type="date"
+                    value={selectedDate}
+                    onChange={(e) => setSelectedDate(e.target.value)}
+                    min={getTodayString()} // 限制最小日期為今天
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2 border"
+                />
+                </div>
+                <div className="w-full sm:w-1/3 pt-6">
+                <button
+                    onClick={loadBookings}
+                    className="w-full py-2 bg-indigo-600 text-white font-semibold rounded-lg shadow hover:bg-indigo-700 transition flex items-center justify-center"
+                    disabled={!selectedInstrument || !selectedDate || loading}
+                >
+                    {loading ? <Hourglass className="animate-spin mr-2 h-5 w-5" /> : <Upload className="mr-2 h-5 w-5" />}
+                    {loading ? '載入中...' : '查看預約時段'}
+                </button>
+                </div>
+            </div>
+            
+            {/* 預約時段網格 */}
+            {selectedInstrument && selectedDate ? (
+                <div className="bg-white rounded-lg shadow-xl p-6">
+                <h2 className="text-2xl font-bold text-gray-800 mb-4">
+                    NMR-{selectedInstrument}MHz - {selectedDate} 預約情況
+                </h2>
+                {loading ? (
+                    <div className="text-center py-12 text-gray-500">
+                    <Hourglass className="animate-spin mx-auto h-8 w-8" />
+                    <p className="mt-2">正在載入時段...</p>
+                    </div>
+                ) : (
+                    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 gap-3">
+                    {timeSlots.map(slot => {
+                        const booking = bookings.find(b => b.time_slot === slot);
+                        const [startTime, endTime] = slot.split('-');
+                        const isPast = new Date(`${selectedDate} ${startTime}`) < new Date();
+                        const isBooked = !!booking;
+                        const isMyBooking = isBooked && booking.user_id === currentUser.id;
                         
-                        {isBooked ? (
-                          <div className="text-xs mt-1 w-full">
-                            <p className="font-semibold truncate">{booking.display_name}</p>
-                            <p className="text-gray-200 text-xs truncate">{booking.pi} Lab</p>
-                            {isMyBooking && !isPast && (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleCancelBooking(booking.id, slot);
-                                }}
-                                className="mt-2 w-full px-2 py-1 bg-white text-red-500 rounded text-xs hover:bg-gray-100 transition border border-red-300"
-                              >
-                                取消 Cancel
-                              </button>
-                            )}
-                          </div>
-                        ) : (
-                          !isPast && <p className="text-xs text-gray-600 font-semibold mt-1">{statusText}</p>
-                        )}
-                        {isPast && <p className="text-xs text-gray-700 mt-1">{statusText}</p>}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="bg-white rounded-lg shadow-sm p-12 text-center">
-              <Calendar className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-              <p className="text-gray-500">請選擇儀器和日期以查看可預約時段</p>
-              <p className="text-gray-400 text-sm mt-2">Please select instrument and date to view available time slots</p>
-            </div>
-          )}
+                        let bgColor = 'bg-green-100 hover:bg-green-200';
+                        let statusText = '可預約';
 
-          {/* 系統規則 */}
-          <div className="bg-white p-6 rounded-lg shadow-xl">
-            <h2 className="text-xl font-bold text-gray-800 mb-3 flex items-center"><AlertCircle className="mr-2 h-5 w-5 text-red-500" /> 儀器使用規則</h2>
-            <ul className="list-disc list-inside text-gray-600 text-sm space-y-1">
-              {systemSettings && Object.values(systemSettings).map((rule, index) => rule && <li key={index}>{rule}</li>)}
-            </ul>
-          </div>
+                        if (isPast) {
+                        bgColor = 'bg-gray-300 text-gray-600';
+                        statusText = '已過期';
+                        } else if (isMyBooking) {
+                        bgColor = 'bg-blue-500 text-white hover:bg-blue-600';
+                        statusText = '我的預約';
+                        } else if (isBooked) {
+                        bgColor = 'bg-red-400 text-white';
+                        statusText = '已被預約';
+                        }
+                        
+                        const canBook = !isBooked && !isPast;
+                        
+                        return (
+                        <div
+                            key={slot}
+                            className={`p-2 rounded-lg shadow-sm transition cursor-pointer flex flex-col justify-between items-center text-center text-sm border-2 ${isPast ? 'opacity-70 cursor-not-allowed' : ''} ${bgColor}`}
+                            onClick={() => canBook && handleBooking(slot)}
+                        >
+                            <p className="font-bold">{slot}</p>
+                            
+                            {isBooked ? (
+                            <div className="text-xs mt-1 w-full">
+                                <p className="font-semibold truncate">{booking.display_name}</p>
+                                <p className="text-gray-200 text-xs truncate">{booking.pi} Lab</p>
+                                {isMyBooking && !isPast && (
+                                <button
+                                    onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleCancelBooking(booking.id, slot);
+                                    }}
+                                    className="mt-2 w-full px-2 py-1 bg-white text-red-500 rounded text-xs hover:bg-gray-100 transition border border-red-300"
+                                >
+                                    取消 Cancel
+                                </button>
+                                )}
+                            </div>
+                            ) : (
+                            !isPast && <p className="text-xs text-gray-600 font-semibold mt-1">{statusText}</p>
+                            )}
+                            {isPast && <p className="text-xs text-gray-700 mt-1">{statusText}</p>}
+                        </div>
+                        );
+                    })}
+                    </div>
+                )}
+                </div>
+            ) : (
+                <div className="bg-white rounded-lg shadow-sm p-12 text-center">
+                <Calendar className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                <p className="text-gray-500">請選擇儀器和日期以查看可預約時段</p>
+                <p className="text-gray-400 text-sm mt-2">Please select instrument and date to view available time slots</p>
+                </div>
+            )}
+
+            {/* 系統規則 */}
+            <div className="bg-white p-6 rounded-lg shadow-xl">
+                <h2 className="text-xl font-bold text-gray-800 mb-3 flex items-center"><AlertCircle className="mr-2 h-5 w-5 text-red-500" /> 儀器使用規則</h2>
+                <ul className="list-disc list-inside text-gray-600 text-sm space-y-1">
+                {systemSettings && Object.values(systemSettings).map((rule, index) => rule && <li key={index}>{rule}</li>)}
+                </ul>
+            </div>
         </div>
       )}
 
+      {/* =============================================== */}
+      {/* 模態框 (Modals) 和 管理面板 (Admin Panel) 渲染區 */}
+      {/* =============================================== */}
+
+      {/* 新增用戶 Modal */}
+      {showAddUserModal && <AddUserModal />}
+      
+      {/* 編輯用戶 Modal */}
+      {showEditUserModal && <EditUserModal />}
+      
+      {/* 新增 Lab Modal */}
+      {showAddLabModal && <AddLabModal />}
+      
+      {/* 編輯 Lab Modal */}
+      {showEditLabModal && <EditLabModal />}
+
       {/* 管理員面板 Modal - 整合所有管理功能 */}
-      {(showAdminPanel || showTimeSlotPanel) && currentUser?.is_admin && (
+      {(showAdminPanel || showTimeSlotPanel || showHistoryPanel || showLabManagementPanel || showSettingsPanel) && currentUser?.is_admin && (
         <div className="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-5xl h-5/6 flex flex-col">
             <div className="flex justify-between items-center p-6 border-b">
               <h2 className="text-2xl font-bold text-indigo-700">管理員面板</h2>
-              <button onClick={() => {setShowAdminPanel(false); setShowTimeSlotPanel(false);}} className="text-gray-400 hover:text-gray-600 p-2 rounded-full transition">
+              <button onClick={() => {setShowAdminPanel(false); setShowTimeSlotPanel(false); setShowHistoryPanel(false); setShowLabManagementPanel(false); setShowSettingsPanel(false);}} className="text-gray-400 hover:text-gray-600 p-2 rounded-full transition">
                 <X className="h-6 w-6" />
               </button>
             </div>
@@ -1028,7 +1493,7 @@ export default function NMRBookingSystem() {
                 {/* 側邊導航欄 */}
                 <div className="w-1/4 bg-gray-50 p-4 border-r space-y-2 flex flex-col">
                     <button onClick={() => {setShowTimeSlotPanel(true); setShowHistoryPanel(false); setShowSettingsPanel(false); setShowLabManagementPanel(false);}} className={`w-full text-left p-3 rounded-lg flex items-center transition ${showTimeSlotPanel ? 'bg-indigo-100 text-indigo-700 font-semibold' : 'text-gray-700 hover:bg-gray-200'}`}><Clock className="mr-2 h-5 w-5" /> 時段與清理</button>
-                    <button onClick={() => {setShowTimeSlotPanel(false); setShowHistoryPanel(false); setShowSettingsPanel(false); setShowLabManagementPanel(false); setShowEditUserModal(false); setShowAddUserModal(true);}} className={`w-full text-left p-3 rounded-lg flex items-center transition ${showAddUserModal ? 'bg-indigo-100 text-indigo-700 font-semibold' : 'text-gray-700 hover:bg-gray-200'}`}><UserPlus className="mr-2 h-5 w-5" /> 用戶管理</button>
+                    <button onClick={() => {setShowTimeSlotPanel(false); setShowHistoryPanel(false); setShowSettingsPanel(false); setShowLabManagementPanel(false); setShowAddUserModal(false); setEditingUser(null); setShowEditUserModal(false); setShowAdminPanel(true);}} className={`w-full text-left p-3 rounded-lg flex items-center transition ${!showTimeSlotPanel && !showHistoryPanel && !showLabManagementPanel && !showSettingsPanel ? 'bg-indigo-100 text-indigo-700 font-semibold' : 'text-gray-700 hover:bg-gray-200'}`}><UserPlus className="mr-2 h-5 w-5" /> 用戶管理</button>
                     <button onClick={() => {setShowTimeSlotPanel(false); setShowHistoryPanel(false); setShowSettingsPanel(true); setShowLabManagementPanel(false);}} className={`w-full text-left p-3 rounded-lg flex items-center transition ${showSettingsPanel ? 'bg-indigo-100 text-indigo-700 font-semibold' : 'text-gray-700 hover:bg-gray-200'}`}><Settings className="mr-2 h-5 w-5" /> 系統規則</button>
                     <button onClick={() => {setShowTimeSlotPanel(false); setShowHistoryPanel(false); setShowSettingsPanel(false); setShowLabManagementPanel(true);}} className={`w-full text-left p-3 rounded-lg flex items-center transition ${showLabManagementPanel ? 'bg-indigo-100 text-indigo-700 font-semibold' : 'text-gray-700 hover:bg-gray-200'}`}><Database className="mr-2 h-5 w-5" /> Lab 管理</button>
                     <button onClick={() => {setShowTimeSlotPanel(false); setShowHistoryPanel(true); setShowSettingsPanel(false); setShowLabManagementPanel(false);}} className={`w-full text-left p-3 rounded-lg flex items-center transition ${showHistoryPanel ? 'bg-indigo-100 text-indigo-700 font-semibold' : 'text-gray-700 hover:bg-gray-200'}`}><Calendar className="mr-2 h-5 w-5" /> 歷史記錄</button>
@@ -1036,9 +1501,12 @@ export default function NMRBookingSystem() {
 
                 {/* 內容區 */}
                 <div className="flex-1 p-6 overflow-y-auto">
+                    {/* 根據按鈕顯示對應的面板 */}
                     {showTimeSlotPanel && <TimeSlotSettingsPanel />}
-                    {/* 這裡需要將其他面板的渲染邏輯 (User Management, Lab Management, History) 補上，以實現完整功能 */}
-                    {/* ... (為了簡潔，這裡先省略其他面板的完整內容，但邏輯已在函式中) ... */}
+                    {showHistoryPanel && <HistoryPanel />}
+                    {showLabManagementPanel && <LabManagementPanel />}
+                    {showSettingsPanel && <SettingsPanel />}
+                    {!showTimeSlotPanel && !showHistoryPanel && !showLabManagementPanel && !showSettingsPanel && <UserManagementPanel />}
                 </div>
             </div>
           </div>
