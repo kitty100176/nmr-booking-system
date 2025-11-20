@@ -280,29 +280,6 @@ const handleLogin = async () => {
     setBookings([]);
   };
 
-const generateTimeSlots = () => {
-  const slots = [];
-  
-  for (let hour = 0; hour < 24; hour++) {
-    for (let min = 0; min < 60; min += 30) {
-      const startTime = `${String(hour).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
-      const endMin = min + 30;
-      const endHour = endMin >= 60 ? (hour + 1) % 24 : hour;
-      const finalMin = endMin >= 60 ? 0 : endMin;
-      
-      let endTime;
-      if (hour === 23 && min === 30) {
-        endTime = '24:00';
-      } else {
-        endTime = `${String(endHour).padStart(2, '0')}:${String(finalMin).padStart(2, '0')}`;
-      }
-      
-      slots.push(`${startTime}-${endTime}`);
-    }
-  }
-  
-  return slots;
-};
 
   const isTimePassed = (date, timeSlot) => {
     const now = new Date();
