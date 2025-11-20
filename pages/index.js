@@ -557,7 +557,7 @@ const generateTimeSlots = () => {
           .from('system_settings')
           .insert([{
             id: 1,
-            .....systemSettings
+            ...systemSettings
           }]);
 
         if (error) throw error;
@@ -599,7 +599,7 @@ const generateTimeSlots = () => {
           .from('timeslot_settings')
           .insert([{
             id: 1,
-            .......timeSlotSettings
+            ...timeSlotSettings
           }]);
 
         if (error) throw error;
@@ -623,7 +623,7 @@ const generateTimeSlots = () => {
     
     const csvContent = [
       headers.join(','),
-      ..historyBookings.map(booking => [
+      historyBookings.map(booking => [
         `"${new Date(booking.booked_at).toLocaleString('zh-TW')}"`,
         `"${booking.display_name}"`,
         `"${booking.pi} Lab"`,
@@ -743,13 +743,13 @@ const generateTimeSlots = () => {
     const current = newUserForm.instruments;
     if (current.includes(instrument)) {
       setNewUserForm({
-        .....newUserForm,
+        ...newUserForm,
         instruments: current.filter(i => i !== instrument)
       });
     } else {
       setNewUserForm({
-        .....newUserForm,
-        instruments: [.....current, instrument]
+        ...newUserForm,
+        instruments: [...current, instrument]
       });
     }
   };
@@ -1029,7 +1029,7 @@ const generateTimeSlots = () => {
               <input
                 type="text"
                 value={newUserForm.username}
-                onChange={(e) => setNewUserForm({.....newUserForm, username: e.target.value})}
+                onChange={(e) => setNewUserForm({...newUserForm, username: e.target.value})}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
                 placeholder="例如：chen123"
               />
@@ -1040,7 +1040,7 @@ const generateTimeSlots = () => {
               <input
                 type="text"
                 value={newUserForm.password}
-                onChange={(e) => setNewUserForm({.....newUserForm, password: e.target.value})}
+                onChange={(e) => setNewUserForm({...newUserForm, password: e.target.value})}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
                 placeholder="設定密碼"
               />
@@ -1051,7 +1051,7 @@ const generateTimeSlots = () => {
               <input
                 type="text"
                 value={newUserForm.display_name}
-                onChange={(e) => setNewUserForm({.....newUserForm, display_name: e.target.value})}
+                onChange={(e) => setNewUserForm({...newUserForm, display_name: e.target.value})}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
                 placeholder="例如：陳小明"
               />
@@ -1061,7 +1061,7 @@ const generateTimeSlots = () => {
               <label className="block text-sm font-medium text-gray-700 mb-2">Lab 名稱 *</label>
               <select
                 value={newUserForm.pi}
-                onChange={(e) => setNewUserForm({.....newUserForm, pi: e.target.value})}
+                onChange={(e) => setNewUserForm({...newUserForm, pi: e.target.value})}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
               >
                 <option value="">請選擇 Lab</option>
@@ -1095,7 +1095,7 @@ const generateTimeSlots = () => {
                 type="checkbox"
                 id="is_admin"
                 checked={newUserForm.is_admin}
-                onChange={(e) => setNewUserForm({.....newUserForm, is_admin: e.target.checked})}
+                onChange={(e) => setNewUserForm({...newUserForm, is_admin: e.target.checked})}
                 className="w-4 h-4 text-indigo-600 rounded"
               />
               <label htmlFor="is_admin" className="text-sm text-gray-700">設為管理員</label>
@@ -1242,7 +1242,7 @@ const generateTimeSlots = () => {
                       <input
                         type="time"
                         value={timeSlotSettings.day_start}
-                        onChange={(e) => setTimeSlotSettings({.......timeSlotSettings, day_start: e.target.value})}
+                        onChange={(e) => setTimeSlotSettings({...timeSlotSettings, day_start: e.target.value})}
                         className="w-full px-4 py-2 border border-gray-300 rounded-lg"
                       />
                     </div>
@@ -1251,7 +1251,7 @@ const generateTimeSlots = () => {
                       <input
                         type="time"
                         value={timeSlotSettings.day_end}
-                        onChange={(e) => setTimeSlotSettings({.......timeSlotSettings, day_end: e.target.value})}
+                        onChange={(e) => setTimeSlotSettings({...timeSlotSettings, day_end: e.target.value})}
                         className="w-full px-4 py-2 border border-gray-300 rounded-lg"
                       />
                     </div>
@@ -1259,7 +1259,7 @@ const generateTimeSlots = () => {
                       <label className="block text-sm font-medium text-gray-700 mb-2">時段間隔（分鐘）</label>
                       <select
                         value={timeSlotSettings.day_interval}
-                        onChange={(e) => setTimeSlotSettings({.......timeSlotSettings, day_interval: parseInt(e.target.value)})}
+                        onChange={(e) => setTimeSlotSettings({...timeSlotSettings, day_interval: parseInt(e.target.value)})}
                         className="w-full px-4 py-2 border border-gray-300 rounded-lg"
                       >
                         <option value="15">15 分鐘</option>
@@ -1281,7 +1281,7 @@ const generateTimeSlots = () => {
                       <input
                         type="time"
                         value={timeSlotSettings.night_start}
-                        onChange={(e) => setTimeSlotSettings({.......timeSlotSettings, night_start: e.target.value})}
+                        onChange={(e) => setTimeSlotSettings({...timeSlotSettings, night_start: e.target.value})}
                         className="w-full px-4 py-2 border border-gray-300 rounded-lg"
                       />
                     </div>
@@ -1290,7 +1290,7 @@ const generateTimeSlots = () => {
                       <input
                         type="time"
                         value={timeSlotSettings.night_end}
-                        onChange={(e) => setTimeSlotSettings({.......timeSlotSettings, night_end: e.target.value})}
+                        onChange={(e) => setTimeSlotSettings({...timeSlotSettings, night_end: e.target.value})}
                         className="w-full px-4 py-2 border border-gray-300 rounded-lg"
                       />
                     </div>
@@ -1298,7 +1298,7 @@ const generateTimeSlots = () => {
                       <label className="block text-sm font-medium text-gray-700 mb-2">時段間隔（分鐘）</label>
                       <select
                         value={timeSlotSettings.night_interval}
-                        onChange={(e) => setTimeSlotSettings({.......timeSlotSettings, night_interval: parseInt(e.target.value)})}
+                        onChange={(e) => setTimeSlotSettings({...timeSlotSettings, night_interval: parseInt(e.target.value)})}
                         className="w-full px-4 py-2 border border-gray-300 rounded-lg"
                       >
                         <option value="15">15 分鐘</option>
@@ -1359,7 +1359,7 @@ const generateTimeSlots = () => {
                       <textarea
                         value={systemSettings[`rule${num}`]}
                         onChange={(e) => setSystemSettings({
-                          .....systemSettings,
+                          ...systemSettings,
                           [`rule${num}`]: e.target.value
                         })}
                         rows={3}
@@ -1641,7 +1641,7 @@ const generateTimeSlots = () => {
                     </div>
                     <div className="flex gap-2">
                       <button
-                        onClick={() => { setEditingUser({.....user, password: ''}); setShowEditUserModal(true); }}
+                        onClick={() => { setEditingUser({...user, password: ''}); setShowEditUserModal(true); }}
                         className="flex items-center gap-1 px-3 py-1 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition text-sm"
                       >
                         <Edit className="w-3 h-3" />
