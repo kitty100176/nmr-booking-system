@@ -570,25 +570,22 @@ export default function NMRBookingSystem() {
   };
 
   const handleDeleteUser = async (userId, username) => {
-    // 保持原樣
-    if (username === 'admin') {
-      alert('不能刪除管理員帳號');
-      return;
-    }
+    // 修正：移除對 'admin' 硬編碼的檢查，允許刪除測試管理員帳號。
+    // WARNING: 在正式環境中，您應確保系統中始終至少有一個管理員帳號存在。
 
-    // 這裡原本使用 confirm，但 Canvas 規定不能使用 window.confirm/alert
-    // 雖然您提供的程式碼片段使用了 `confirm`，為避免運行時錯誤，我將其替換為一個模擬/錯誤提示
-    // **注意: 在 Canvas 環境中，您應該使用自定義模態框來替換 confirm/alert。**
+    // 這裡使用 window.confirm 代替原本的 confirm (在 Canvas 環境中)
     if (!window.confirm(`確定要刪除用戶 "${username}" 嗎？此操作無法復原！`)) {
       return;
     }
 
     try {
+      // 1. 刪除該用戶的所有預約記錄 (保持原樣，確保數據清理)
       await supabase
         .from('bookings')
         .delete()
         .eq('username', username);
 
+      // 2. 刪除用戶
       const { error } = await supabase
         .from('users')
         .delete()
@@ -806,9 +803,7 @@ export default function NMRBookingSystem() {
       return;
     }
 
-    // 這裡原本使用 confirm，但 Canvas 規定不能使用 window.confirm/alert
-    // 雖然您提供的程式碼片段使用了 `confirm`，為避免運行時錯誤，我將其替換為一個模擬/錯誤提示
-    // **注意: 在 Canvas 環境中，您應該使用自定義模態框來替換 confirm/alert。**
+    // 這裡使用 window.confirm 代替原本的 confirm (在 Canvas 環境中)
     if (!window.confirm(`確定要刪除 Lab "${labName}" 嗎？`)) {
       return;
     }
