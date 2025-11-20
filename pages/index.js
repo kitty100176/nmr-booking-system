@@ -570,20 +570,15 @@ export default function NMRBookingSystem() {
   };
 
   const handleDeleteUser = async (userId, username) => {
-    // 修正：移除對 'admin' 硬編碼的檢查，允許刪除測試管理員帳號。
-    // WARNING: 在正式環境中，您應確保系統中始終至少有一個管理員帳號存在。
-
+    // 修正：移除刪除 bookings 的程式碼，以便保留歷史預約紀錄
+    
     // 這裡使用 window.confirm 代替原本的 confirm (在 Canvas 環境中)
     if (!window.confirm(`確定要刪除用戶 "${username}" 嗎？此操作無法復原！`)) {
       return;
     }
 
     try {
-      // 1. 刪除該用戶的所有預約記錄 (保持原樣，確保數據清理)
-      await supabase
-        .from('bookings')
-        .delete()
-        .eq('username', username);
+      // **刪除預約記錄的程式碼已移除**
 
       // 2. 刪除用戶
       const { error } = await supabase
@@ -593,7 +588,7 @@ export default function NMRBookingSystem() {
 
       if (error) throw error;
 
-      alert('用戶已刪除');
+      alert('用戶已刪除，但其歷史預約紀錄已保留。'); // 更改提示訊息
       await loadUsers();
     } catch (error) {
       console.error('刪除用戶失敗:', error);
