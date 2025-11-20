@@ -9,6 +9,7 @@ export default function NMRBookingSystem() {
   const [loginForm, setLoginForm] = useState({ username: '', password: '' });
   const [selectedInstrument, setSelectedInstrument] = useState('');
   const [selectedDate, setSelectedDate] = useState('');
+  const [selectedMonth, setSelectedMonth] = useState('');
   const [bookings, setBookings] = useState([]);
   const [users, setUsers] = useState([]);
   const [showAdminPanel, setShowAdminPanel] = useState(false);
@@ -60,6 +61,22 @@ export default function NMRBookingSystem() {
       setSelectedDate(getTodayString());
     }
   }, [isLoggedIn]);
+
+  // 新增：初始化當前月份
+  useEffect(() => {
+  if (showHistoryPanel && !selectedMonth) {
+      const today = new Date();
+      const currentMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+      setSelectedMonth(currentMonth);
+    }
+  }, [showHistoryPanel]);
+
+  // 新增：當選擇月份改變時載入該月資料
+  useEffect(() => {
+    if (showHistoryPanel && selectedMonth) {
+      loadHistoryBookings(selectedMonth);
+    }
+  }, [selectedMonth, showHistoryPanel]);
 
   const loadUsers = async () => {
     try {
@@ -155,20 +172,34 @@ export default function NMRBookingSystem() {
     }
   };
 
-  const loadHistoryBookings = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('bookings')
-        .select('*')
-        .order('booked_at', { ascending: false })
-        .limit(100);
-      
-      if (error) throw error;
-      setHistoryBookings(data || []);
-    } catch (error) {
-      console.error('載入歷史記錄失敗:', error);
+  const loadHistoryBookings = async (month) => {
+  try {
+    if (!month) {
+      setHistoryBookings([]);
+      return;
     }
-  };
+
+    const [year, monthNum] = month.split('-');
+    const startDate = `${year}-${monthNum}-01`;
+    
+    // 計算該月最後一天
+    const lastDay = new Date(parseInt(year), parseInt(monthNum), 0).getDate();
+    const endDate = `${year}-${monthNum}-${String(lastDay).padStart(2, '0')}`;
+
+    const { data, error } = await supabase
+      .from('bookings')
+      .select('*')
+      .gte('date', startDate)
+      .lte('date', endDate)
+      .order('booked_at', { ascending: false});
+    
+    if (error) throw error;
+    setHistoryBookings(data || []);
+  } catch (error) {
+    console.error('載入歷史記錄失敗:', error);
+    setHistoryBookings([]);
+  }
+};
 
   const loadLabs = async () => {
     try {
@@ -249,58 +280,29 @@ const handleLogin = async () => {
     setBookings([]);
   };
 
-  const getTodayString = () => {
-    const today = new Date();
-    return today.toISOString().split('T')[0];
-  };
-
-  const generateTimeSlots = () => {
-    if (!timeSlotSettings) return [];
-    
-    const slots = [];
-    const dayStart = parseInt(timeSlotSettings.day_start.split(':')[0]);
-    const dayEnd = parseInt(timeSlotSettings.day_end.split(':')[0]);
-    const nightStart = parseInt(timeSlotSettings.night_start.split(':')[0]);
-    const dayInterval = timeSlotSettings.day_interval;
-    const nightInterval = timeSlotSettings.night_interval;
-    
-    // 日間時段
-    for (let hour = dayStart; hour < dayEnd; hour++) {
-      for (let min = 0; min < 60; min += dayInterval) {
-        const startTime = `${hour.toString().padStart(2, '0')}:${min.toString().padStart(2, '0')}`;
-        const endMin = min + dayInterval;
-        const endHour = endMin >= 60 ? hour + 1 : hour;
-        const finalMin = endMin >= 60 ? endMin - 60 : endMin;
-        const endTime = `${endHour.toString().padStart(2, '0')}:${finalMin.toString().padStart(2, '0')}`;
-        slots.push(`${startTime}-${endTime}`);
+const generateTimeSlots = () => {
+  const slots = [];
+  
+  for (let hour = 0; hour < 24; hour++) {
+    for (let min = 0; min < 60; min += 30) {
+      const startTime = `${String(hour).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
+      const endMin = min + 30;
+      const endHour = endMin >= 60 ? (hour + 1) % 24 : hour;
+      const finalMin = endMin >= 60 ? 0 : endMin;
+      
+      let endTime;
+      if (hour === 23 && min === 30) {
+        endTime = '24:00';
+      } else {
+        endTime = `${String(endHour).padStart(2, '0')}:${String(finalMin).padStart(2, '0')}`;
       }
+      
+      slots.push(`${startTime}-${endTime}`);
     }
-    
-    // 夜間時段
-    for (let hour = nightStart; hour < 24; hour++) {
-      for (let min = 0; min < 60; min += nightInterval) {
-        const startTime = `${hour.toString().padStart(2, '0')}:${min.toString().padStart(2, '0')}`;
-        const endMin = min + nightInterval;
-        const endHour = endMin >= 60 ? hour + 1 : hour;
-        const finalMin = endMin >= 60 ? endMin - 60 : endMin;
-        const endTime = endHour >= 24 ? `00:${finalMin.toString().padStart(2, '0')}` : `${endHour.toString().padStart(2, '0')}:${finalMin.toString().padStart(2, '0')}`;
-        slots.push(`${startTime}-${endTime}`);
-      }
-    }
-    
-    for (let hour = 0; hour < dayStart; hour++) {
-      for (let min = 0; min < 60; min += nightInterval) {
-        const startTime = `${hour.toString().padStart(2, '0')}:${min.toString().padStart(2, '0')}`;
-        const endMin = min + nightInterval;
-        const endHour = endMin >= 60 ? hour + 1 : hour;
-        const finalMin = endMin >= 60 ? endMin - 60 : endMin;
-        const endTime = `${endHour.toString().padStart(2, '0')}:${finalMin.toString().padStart(2, '0')}`;
-        slots.push(`${startTime}-${endTime}`);
-      }
-    }
-    
-    return slots;
-  };
+  }
+  
+  return slots;
+};
 
   const isTimePassed = (date, timeSlot) => {
     const now = new Date();
@@ -555,7 +557,7 @@ const handleLogin = async () => {
           .from('system_settings')
           .insert([{
             id: 1,
-            ...systemSettings
+            .....systemSettings
           }]);
 
         if (error) throw error;
@@ -597,7 +599,7 @@ const handleLogin = async () => {
           .from('timeslot_settings')
           .insert([{
             id: 1,
-            ...timeSlotSettings
+            .......timeSlotSettings
           }]);
 
         if (error) throw error;
@@ -621,7 +623,7 @@ const handleLogin = async () => {
     
     const csvContent = [
       headers.join(','),
-      ...historyBookings.map(booking => [
+      ..historyBookings.map(booking => [
         `"${new Date(booking.booked_at).toLocaleString('zh-TW')}"`,
         `"${booking.display_name}"`,
         `"${booking.pi} Lab"`,
@@ -637,8 +639,7 @@ const handleLogin = async () => {
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
     link.setAttribute('href', url);
-    link.setAttribute('download', `預約記錄_${new Date().toISOString().split('T')[0]}.csv`);
-    link.style.visibility = 'hidden';
+    link.setAttribute('download', `預約記錄_${selectedMonth}.csv`);    link.style.visibility = 'hidden';
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -742,13 +743,13 @@ const handleLogin = async () => {
     const current = newUserForm.instruments;
     if (current.includes(instrument)) {
       setNewUserForm({
-        ...newUserForm,
+        .....newUserForm,
         instruments: current.filter(i => i !== instrument)
       });
     } else {
       setNewUserForm({
-        ...newUserForm,
-        instruments: [...current, instrument]
+        .....newUserForm,
+        instruments: [.....current, instrument]
       });
     }
   };
@@ -1028,7 +1029,7 @@ const handleLogin = async () => {
               <input
                 type="text"
                 value={newUserForm.username}
-                onChange={(e) => setNewUserForm({...newUserForm, username: e.target.value})}
+                onChange={(e) => setNewUserForm({.....newUserForm, username: e.target.value})}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
                 placeholder="例如：chen123"
               />
@@ -1039,7 +1040,7 @@ const handleLogin = async () => {
               <input
                 type="text"
                 value={newUserForm.password}
-                onChange={(e) => setNewUserForm({...newUserForm, password: e.target.value})}
+                onChange={(e) => setNewUserForm({.....newUserForm, password: e.target.value})}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
                 placeholder="設定密碼"
               />
@@ -1050,7 +1051,7 @@ const handleLogin = async () => {
               <input
                 type="text"
                 value={newUserForm.display_name}
-                onChange={(e) => setNewUserForm({...newUserForm, display_name: e.target.value})}
+                onChange={(e) => setNewUserForm({.....newUserForm, display_name: e.target.value})}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
                 placeholder="例如：陳小明"
               />
@@ -1060,7 +1061,7 @@ const handleLogin = async () => {
               <label className="block text-sm font-medium text-gray-700 mb-2">Lab 名稱 *</label>
               <select
                 value={newUserForm.pi}
-                onChange={(e) => setNewUserForm({...newUserForm, pi: e.target.value})}
+                onChange={(e) => setNewUserForm({.....newUserForm, pi: e.target.value})}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
               >
                 <option value="">請選擇 Lab</option>
@@ -1094,7 +1095,7 @@ const handleLogin = async () => {
                 type="checkbox"
                 id="is_admin"
                 checked={newUserForm.is_admin}
-                onChange={(e) => setNewUserForm({...newUserForm, is_admin: e.target.checked})}
+                onChange={(e) => setNewUserForm({.....newUserForm, is_admin: e.target.checked})}
                 className="w-4 h-4 text-indigo-600 rounded"
               />
               <label htmlFor="is_admin" className="text-sm text-gray-700">設為管理員</label>
@@ -1241,7 +1242,7 @@ const handleLogin = async () => {
                       <input
                         type="time"
                         value={timeSlotSettings.day_start}
-                        onChange={(e) => setTimeSlotSettings({...timeSlotSettings, day_start: e.target.value})}
+                        onChange={(e) => setTimeSlotSettings({.......timeSlotSettings, day_start: e.target.value})}
                         className="w-full px-4 py-2 border border-gray-300 rounded-lg"
                       />
                     </div>
@@ -1250,7 +1251,7 @@ const handleLogin = async () => {
                       <input
                         type="time"
                         value={timeSlotSettings.day_end}
-                        onChange={(e) => setTimeSlotSettings({...timeSlotSettings, day_end: e.target.value})}
+                        onChange={(e) => setTimeSlotSettings({.......timeSlotSettings, day_end: e.target.value})}
                         className="w-full px-4 py-2 border border-gray-300 rounded-lg"
                       />
                     </div>
@@ -1258,7 +1259,7 @@ const handleLogin = async () => {
                       <label className="block text-sm font-medium text-gray-700 mb-2">時段間隔（分鐘）</label>
                       <select
                         value={timeSlotSettings.day_interval}
-                        onChange={(e) => setTimeSlotSettings({...timeSlotSettings, day_interval: parseInt(e.target.value)})}
+                        onChange={(e) => setTimeSlotSettings({.......timeSlotSettings, day_interval: parseInt(e.target.value)})}
                         className="w-full px-4 py-2 border border-gray-300 rounded-lg"
                       >
                         <option value="15">15 分鐘</option>
@@ -1280,7 +1281,7 @@ const handleLogin = async () => {
                       <input
                         type="time"
                         value={timeSlotSettings.night_start}
-                        onChange={(e) => setTimeSlotSettings({...timeSlotSettings, night_start: e.target.value})}
+                        onChange={(e) => setTimeSlotSettings({.......timeSlotSettings, night_start: e.target.value})}
                         className="w-full px-4 py-2 border border-gray-300 rounded-lg"
                       />
                     </div>
@@ -1289,7 +1290,7 @@ const handleLogin = async () => {
                       <input
                         type="time"
                         value={timeSlotSettings.night_end}
-                        onChange={(e) => setTimeSlotSettings({...timeSlotSettings, night_end: e.target.value})}
+                        onChange={(e) => setTimeSlotSettings({.......timeSlotSettings, night_end: e.target.value})}
                         className="w-full px-4 py-2 border border-gray-300 rounded-lg"
                       />
                     </div>
@@ -1297,7 +1298,7 @@ const handleLogin = async () => {
                       <label className="block text-sm font-medium text-gray-700 mb-2">時段間隔（分鐘）</label>
                       <select
                         value={timeSlotSettings.night_interval}
-                        onChange={(e) => setTimeSlotSettings({...timeSlotSettings, night_interval: parseInt(e.target.value)})}
+                        onChange={(e) => setTimeSlotSettings({.......timeSlotSettings, night_interval: parseInt(e.target.value)})}
                         className="w-full px-4 py-2 border border-gray-300 rounded-lg"
                       >
                         <option value="15">15 分鐘</option>
@@ -1358,7 +1359,7 @@ const handleLogin = async () => {
                       <textarea
                         value={systemSettings[`rule${num}`]}
                         onChange={(e) => setSystemSettings({
-                          ...systemSettings,
+                          .....systemSettings,
                           [`rule${num}`]: e.target.value
                         })}
                         rows={3}
@@ -1412,10 +1413,6 @@ const handleLogin = async () => {
 
   // 歷史預約記錄面板
   if (showHistoryPanel && currentUser?.is_admin) {
-    if (!historyBookings.length && !loading) {
-      loadHistoryBookings();
-    }
-
     return (
       <div className="min-h-screen bg-gray-50">
         <div className="bg-white shadow-sm border-b">
@@ -1424,7 +1421,12 @@ const handleLogin = async () => {
             <div className="flex gap-3">
               <button
                 onClick={exportToCSV}
-                className="flex items-center gap-2 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition"
+                disabled={historyBookings.length === 0}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg transition ${
+                  historyBookings.length === 0
+                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                    : 'bg-green-500 text-white hover:bg-green-600'
+                }`}
               >
                 <Check className="w-4 h-4" />
                 匯出 CSV
@@ -1441,6 +1443,22 @@ const handleLogin = async () => {
         </div>
         
         <div className="max-w-7xl mx-auto p-4">
+          {/* 新增：月份選擇器 */}
+          <div className="bg-white rounded-lg shadow-sm p-4 mb-4">
+            <div className="flex items-center gap-4">
+              <label className="text-sm font-medium text-gray-700">選擇月份：</label>
+              <input
+                type="month"
+                value={selectedMonth}
+                onChange={(e) => setSelectedMonth(e.target.value)}
+                className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+              />
+              <span className="text-sm text-gray-600">
+                {historyBookings.length} 筆記錄
+              </span>
+            </div>
+          </div>
+
           <div className="bg-white rounded-lg shadow-sm overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full">
@@ -1482,7 +1500,7 @@ const handleLogin = async () => {
             </div>
             {historyBookings.length === 0 && (
               <div className="text-center py-12 text-gray-500">
-                暫無預約記錄
+                {selectedMonth ? `${selectedMonth} 無預約記錄` : '請選擇月份查看記錄'}
               </div>
             )}
           </div>
@@ -1490,6 +1508,7 @@ const handleLogin = async () => {
       </div>
     );
   }
+
 // Lab 管理面板
   if (showLabManagementPanel && currentUser?.is_admin) {
     return (
@@ -1622,7 +1641,7 @@ const handleLogin = async () => {
                     </div>
                     <div className="flex gap-2">
                       <button
-                        onClick={() => { setEditingUser({...user, password: ''}); setShowEditUserModal(true); }}
+                        onClick={() => { setEditingUser({.....user, password: ''}); setShowEditUserModal(true); }}
                         className="flex items-center gap-1 px-3 py-1 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition text-sm"
                       >
                         <Edit className="w-3 h-3" />
