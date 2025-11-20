@@ -304,54 +304,6 @@ const generateTimeSlots = () => {
   return slots;
 };
 
-  const generateTimeSlots = () => {
-    if (!timeSlotSettings) return [];
-    
-    const slots = [];
-    const dayStart = parseInt(timeSlotSettings.day_start.split(':')[0]);
-    const dayEnd = parseInt(timeSlotSettings.day_end.split(':')[0]);
-    const nightStart = parseInt(timeSlotSettings.night_start.split(':')[0]);
-    const dayInterval = timeSlotSettings.day_interval;
-    const nightInterval = timeSlotSettings.night_interval;
-    
-    // 日間時段
-    for (let hour = dayStart; hour < dayEnd; hour++) {
-      for (let min = 0; min < 60; min += dayInterval) {
-        const startTime = `${hour.toString().padStart(2, '0')}:${min.toString().padStart(2, '0')}`;
-        const endMin = min + dayInterval;
-        const endHour = endMin >= 60 ? hour + 1 : hour;
-        const finalMin = endMin >= 60 ? endMin - 60 : endMin;
-        const endTime = `${endHour.toString().padStart(2, '0')}:${finalMin.toString().padStart(2, '0')}`;
-        slots.push(`${startTime}-${endTime}`);
-      }
-    }
-    
-    // 夜間時段
-    for (let hour = nightStart; hour < 24; hour++) {
-      for (let min = 0; min < 60; min += nightInterval) {
-        const startTime = `${hour.toString().padStart(2, '0')}:${min.toString().padStart(2, '0')}`;
-        const endMin = min + nightInterval;
-        const endHour = endMin >= 60 ? hour + 1 : hour;
-        const finalMin = endMin >= 60 ? endMin - 60 : endMin;
-        const endTime = endHour >= 24 ? `00:${finalMin.toString().padStart(2, '0')}` : `${endHour.toString().padStart(2, '0')}:${finalMin.toString().padStart(2, '0')}`;
-        slots.push(`${startTime}-${endTime}`);
-      }
-    }
-    
-    for (let hour = 0; hour < dayStart; hour++) {
-      for (let min = 0; min < 60; min += nightInterval) {
-        const startTime = `${hour.toString().padStart(2, '0')}:${min.toString().padStart(2, '0')}`;
-        const endMin = min + nightInterval;
-        const endHour = endMin >= 60 ? hour + 1 : hour;
-        const finalMin = endMin >= 60 ? endMin - 60 : endMin;
-        const endTime = `${endHour.toString().padStart(2, '0')}:${finalMin.toString().padStart(2, '0')}`;
-        slots.push(`${startTime}-${endTime}`);
-      }
-    }
-    
-    return slots;
-  };
-
   const isTimePassed = (date, timeSlot) => {
     const now = new Date();
     const selectedDateTime = new Date(date);
