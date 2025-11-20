@@ -1469,21 +1469,6 @@ const generateTimeSlots = () => {
       <div className="min-h-screen bg-gray-50">
         <div className="bg-white shadow-sm border-b">
           <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
-            {/* 新增：月份選擇器 */}
-<div className="bg-white rounded-lg shadow-sm p-4 mb-4">
-  <div className="flex items-center gap-4">
-    <label className="text-sm font-medium text-gray-700">選擇月份：</label>
-    <input
-      type="month"
-      value={selectedMonth}
-      onChange={(e) => setSelectedMonth(e.target.value)}
-      className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-    />
-    <span className="text-sm text-gray-600">
-      {historyBookings.length} 筆記錄
-    </span>
-  </div>
-</div>
             <h1 className="text-2xl font-bold text-gray-800">歷史預約記錄</h1>
             <div className="flex gap-3">
               <button
@@ -1505,6 +1490,21 @@ const generateTimeSlots = () => {
         </div>
         
         <div className="max-w-7xl mx-auto p-4">
+{/* 新增：月份選擇器 */}
+<div className="bg-white rounded-lg shadow-sm p-4 mb-4">
+  <div className="flex items-center gap-4">
+    <label className="text-sm font-medium text-gray-700">選擇月份：</label>
+    <input
+      type="month"
+      value={selectedMonth}
+      onChange={(e) => setSelectedMonth(e.target.value)}
+      className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+    />
+    <span className="text-sm text-gray-600">
+      {historyBookings.length} 筆記錄
+    </span>
+  </div>
+</div>
           <div className="bg-white rounded-lg shadow-sm overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full">
