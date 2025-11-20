@@ -9,8 +9,8 @@ export default function NMRBookingSystem() {
   const [loginForm, setLoginForm] = useState({ username: '', password: '' });
   const [selectedInstrument, setSelectedInstrument] = useState('');
   const [selectedDate, setSelectedDate] = useState('');
-  const [selectedMonth, setSelectedMonth] = useState('');
   const [bookings, setBookings] = useState([]);
+  const [selectedMonth, setSelectedMonth] = useState(''); // 新增這行
   const [users, setUsers] = useState([]);
   const [showAdminPanel, setShowAdminPanel] = useState(false);
   const [showHistoryPanel, setShowHistoryPanel] = useState(false);
@@ -62,21 +62,23 @@ export default function NMRBookingSystem() {
     }
   }, [isLoggedIn]);
 
-  // 新增：初始化當前月份
-  useEffect(() => {
-  if (showHistoryPanel && !selectedMonth) {
-      const today = new Date();
-      const currentMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
-      setSelectedMonth(currentMonth);
-    }
-  }, [showHistoryPanel]);
 
-  // 新增：當選擇月份改變時載入該月資料
-  useEffect(() => {
-    if (showHistoryPanel && selectedMonth) {
-      loadHistoryBookings(selectedMonth);
-    }
-  }, [selectedMonth, showHistoryPanel]);
+// 新增：初始化當前月份
+useEffect(() => {
+  if (showHistoryPanel && !selectedMonth) {
+    const today = new Date();
+    const currentMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+    setSelectedMonth(currentMonth);
+  }
+}, [showHistoryPanel]);
+
+// 新增：當選擇月份改變時載入該月資料
+useEffect(() => {
+  if (showHistoryPanel && selectedMonth) {
+    loadHistoryBookings(selectedMonth);
+  }
+}, [selectedMonth, showHistoryPanel]);
+
 
   const loadUsers = async () => {
     try {
@@ -172,7 +174,7 @@ export default function NMRBookingSystem() {
     }
   };
 
-  const loadHistoryBookings = async (month) => {
+const loadHistoryBookings = async (month) => {
   try {
     if (!month) {
       setHistoryBookings([]);
@@ -279,6 +281,36 @@ const handleLogin = async () => {
     setShowTimeSlotPanel(false);
     setBookings([]);
   };
+
+  const getTodayString = () => {
+    const today = new Date();
+    return today.toISOString().split('T')[0];
+  };
+
+const generateTimeSlots = () => {
+  const slots = [];
+  
+  for (let hour = 0; hour < 24; hour++) {
+    for (let min = 0; min < 60; min += 30) {
+      const startTime = `${String(hour).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
+      const endMin = min + 30;
+      const endHour = endMin >= 60 ? (hour + 1) % 24 : hour;
+      const finalMin = endMin >= 60 ? 0 : endMin;
+      
+      let endTime;
+      if (hour === 23 && min === 30) {
+        endTime = '24:00';
+      } else {
+        endTime = `${String(endHour).padStart(2, '0')}:${String(finalMin).padStart(2, '0')}`;
+      }
+      
+      slots.push(`${startTime}-${endTime}`);
+    }
+  }
+  
+  return slots;
+};
+
 
 
   const isTimePassed = (date, timeSlot) => {
@@ -600,7 +632,7 @@ const handleLogin = async () => {
     
     const csvContent = [
       headers.join(','),
-      historyBookings.map(booking => [
+      ...historyBookings.map(booking => [
         `"${new Date(booking.booked_at).toLocaleString('zh-TW')}"`,
         `"${booking.display_name}"`,
         `"${booking.pi} Lab"`,
@@ -1388,7 +1420,7 @@ const handleLogin = async () => {
     );
   }
 
-  // 歷史預約記錄面板
+// 歷史預約記錄面板
   if (showHistoryPanel && currentUser?.is_admin) {
     return (
       <div className="min-h-screen bg-gray-50">
@@ -1485,6 +1517,7 @@ const handleLogin = async () => {
       </div>
     );
   }
+
 
 // Lab 管理面板
   if (showLabManagementPanel && currentUser?.is_admin) {
