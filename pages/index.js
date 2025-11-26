@@ -13,6 +13,9 @@ export default function NMRBookingSystem() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
   const [showNotification, setShowNotification] = useState(false);
+  // 【新增這行】控制歷史記錄提醒視窗
+  const [showHistoryNotice, setShowHistoryNotice] = useState(false); 
+  const [loginForm, setLoginForm] = useState({ username: '', password: '' });
   const [loginForm, setLoginForm] = useState({ username: '', password: '' });
   const [selectedInstrument, setSelectedInstrument] = useState('');
   const [selectedDate, setSelectedDate] = useState('');
@@ -1032,6 +1035,50 @@ const handleClearHistory = async () => {
     );
   }
 
+// 【新增：歷史記錄提醒視窗】
+  if (showHistoryNotice && currentUser?.is_admin) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-xl shadow-lg p-8 max-w-md w-full">
+          <div className="text-center">
+            {/* 使用藍色提醒圖示取代綠色 Check */}
+            <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <AlertCircle className="w-8 h-8 text-blue-600" />
+            </div>
+            <h2 className="text-2xl font-bold text-gray-800 mb-2">歷史記錄管理提醒</h2>
+            <p className="text-gray-600 mb-6">數據維護是管理員的重要職責。</p>
+            
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6 text-left">
+              <p className="text-sm text-gray-700 mb-3"><strong>數據維護注意事項 Notes:</strong></p>
+              <ul className="text-sm text-gray-600 space-y-2">
+                <li className="list-none text-red-700 font-semibold">
+                  • 因後臺容量有限，記得**每年一月清理數據一次**！！！<br/>
+                  <span className="ml-3 font-normal text-red-600">Please perform annual data cleanup (Settings > Time Slot)</span>
+                </li>
+                <li className="list-none">
+                  • 手動刪除帳號會**保留**其歷史預約記錄。
+                </li>
+                <li className="list-none">
+                  • 選擇月份，下載歷史記錄即可得到**選擇月份的預約紀錄**。
+                </li>
+              </ul>
+            </div>
+            
+            <button
+              onClick={() => {
+                setShowHistoryNotice(false);
+                setShowHistoryPanel(true); // 點擊按鈕後，跳轉到歷史記錄畫面
+              }}
+              className="w-full bg-indigo-600 text-white py-3 rounded-lg hover:bg-indigo-700 transition font-medium"
+            >
+              我知道了，查看歷史記錄
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // 新增 Lab 彈窗
   if (showAddLabModal) {
     return (
@@ -1947,7 +1994,8 @@ const handleClearHistory = async () => {
                     用戶管理
                   </button>
                   <button
-                    onClick={() => setShowHistoryPanel(true)}
+                    // 【修改這裡】：點擊時，先顯示提醒視窗，而不是直接進入面板
+                    onClick={() => setShowHistoryNotice(true)} 
                     className="flex items-center gap-2 px-3 py-2 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 transition text-sm"
                   >
                     <Calendar className="w-4 h-4" />
