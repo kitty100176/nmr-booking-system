@@ -1054,7 +1054,7 @@ if (showHistoryNotice && currentUser?.is_admin) {
               <li className="list-none text-red-700 font-semibold">
                 {/* 修正後的乾淨文本 */}
                 • 因後臺容量有限，記得每年執行一次數據清理！<br/>
-                <span className="ml-3 font-normal text-red-600">Please perform annual data cleanup (Settings &gt; Time Slot)</span>
+                
               </li>
               <li className="list-none">
                 • 手動刪除帳號會保留其歷史預約記錄。
