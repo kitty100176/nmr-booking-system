@@ -1053,7 +1053,7 @@ if (showHistoryNotice && currentUser?.is_admin) {
             <ul className="text-sm text-gray-600 space-y-2">
               <li className="list-none text-red-700 font-semibold">
                 {/* 修正後的乾淨文本 */}
-                • 因後臺容量有限，記得每年執行一次數據清理！<br/>
+                • 因後臺容量有限，記得每年一月執行一次數據清理！<br/>
                 
               </li>
               <li className="list-none">
