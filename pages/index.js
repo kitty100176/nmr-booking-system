@@ -22,7 +22,7 @@ export default function NMRBookingSystem() {
   // 【新增狀態】：控制歷史記錄提醒視窗
   const [showHistoryNotice, setShowHistoryNotice] = useState(false); 
   
-  // 修正：移除重複的 loginForm 定義
+  // 修正：只保留一組 loginForm 定義
   const [loginForm, setLoginForm] = useState({ username: '', password: '' });
   
   const [selectedInstrument, setSelectedInstrument] = useState('');
@@ -637,7 +637,7 @@ export default function NMRBookingSystem() {
 
       if (error) throw error;
 
-      alert(`清理完成！已刪除 ${count || 0} 筆早於 ${cutoffYear} 年的舊記錄。`);
+      alert(`清理完成！已刪除 ${count || 0} 筆早於 ${cleanupYear} 年的舊記錄。`);
       
       // 重新載入當前歷史列表（如果有顯示的話）
       if (selectedMonth) {
