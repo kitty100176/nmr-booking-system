@@ -9,13 +9,18 @@ const getTodayString = () => {
   return today.toISOString().split('T')[0];
 };
 
+// 輔助函式：將 HH:MM 轉換為總分鐘數 (用於 generateTimeSlots)
+const parseTime = (timeStr) => {
+  const [h, m] = timeStr.split(':').map(Number);
+  return h * 60 + m; // 轉換為總分鐘數
+};
+
 export default function NMRBookingSystem() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
   const [showNotification, setShowNotification] = useState(false);
-  // 【新增這行】控制歷史記錄提醒視窗
+  // 【新增狀態】：控制歷史記錄提醒視窗
   const [showHistoryNotice, setShowHistoryNotice] = useState(false); 
-  const [loginForm, setLoginForm] = useState({ username: '', password: '' });
   const [loginForm, setLoginForm] = useState({ username: '', password: '' });
   const [selectedInstrument, setSelectedInstrument] = useState('');
   const [selectedDate, setSelectedDate] = useState('');
@@ -37,9 +42,6 @@ export default function NMRBookingSystem() {
   const [historyBookings, setHistoryBookings] = useState([]);
   const [systemSettings, setSystemSettings] = useState(null);
   const [labs, setLabs] = useState([]);
-  // ... 原有的 state ...
-  const [showClearHistoryModal, setShowClearHistoryModal] = useState(false);
-  const [cleanupYear, setCleanupYear] = useState(new Date().getFullYear() - 1); // 預設為去年
   // 確保 timeSlotSettings 是從資料庫載入的
   const [timeSlotSettings, setTimeSlotSettings] = useState(null); 
   const [newLabForm, setNewLabForm] = useState({ name: '', description: '' });
@@ -52,6 +54,11 @@ export default function NMRBookingSystem() {
     is_admin: false
   });
 
+  // 新增狀態：選擇要清理的截止年份 (預設為當前年份 - 3)
+  const currentYear = new Date().getFullYear();
+  const [cleanupYear, setCleanupYear] = useState(currentYear - 3);
+
+
   // 儀器列表 - 統一管理
   const INSTRUMENTS = ['60', '500'];
 
@@ -63,11 +70,6 @@ export default function NMRBookingSystem() {
     
     const slots = [];
     const { day_start, day_end, day_interval, night_start, night_end, night_interval } = timeSlotSettings;
-
-    const parseTime = (timeStr) => {
-      const [h, m] = timeStr.split(':').map(Number);
-      return h * 60 + m; // 轉換為總分鐘數
-    };
 
     const formatTime = (minutes) => {
       const h = Math.floor(minutes / 60) % 24;
@@ -227,7 +229,6 @@ export default function NMRBookingSystem() {
 
   // ===============================================
   // 資料庫操作和邏輯 (loadSystemSettings, loadTimeSlotSettings, handleLogin 等)
-  // 保持原來的邏輯，但將 loadUsers, loadBookings, loadHistoryBookings 改為從 useCallback 獲取
   // ===============================================
 
   const loadSystemSettings = async () => {
@@ -575,18 +576,17 @@ export default function NMRBookingSystem() {
     }
   };
 
+  // 處理刪除用戶 (保留預約紀錄)
   const handleDeleteUser = async (userId, username) => {
-    // 修正：移除刪除 bookings 的程式碼，以便保留歷史預約紀錄
-    
     // 這裡使用 window.confirm 代替原本的 confirm (在 Canvas 環境中)
-    if (!window.confirm(`確定要刪除用戶 "${username}" 嗎？此操作無法復原！`)) {
+    if (!window.confirm(`確定要刪除用戶 "${username}" 嗎？此操作無法復原，但其預約紀錄將會保留。`)) {
       return;
     }
 
     try {
-      // **刪除預約記錄的程式碼已移除**
-
-      // 2. 刪除用戶
+      // **移除：刪除預約記錄的邏輯 (確保保留紀錄)**
+      
+      // 刪除用戶
       const { error } = await supabase
         .from('users')
         .delete()
@@ -602,14 +602,19 @@ export default function NMRBookingSystem() {
     }
   };
 
-const handleClearHistory = async () => {
-    if (!cleanupYear) {
-      alert('請輸入年份');
+  // 新增：清除歷史記錄的函式
+  const handleClearHistory = async () => {
+    if (!currentUser?.is_admin || !cleanupYear) {
+      alert('清理失敗: 請選擇要清理的截止年份。');
       return;
     }
 
+    // 截止日期設定為所選年份的下一年的第一天 (即刪除早於該年 12/31 的所有數據)
+    const cutoffDate = new Date(Number(cleanupYear), 0, 1);
+    const cutoffDateString = cutoffDate.toISOString().split('T')[0];
+
     // 安全確認
-    const confirmMessage = `警告：您即將刪除 ${cleanupYear} 年 1 月 1 日之前的「所有」預約記錄。\n\n此操作僅會清除預約歷史，不會刪除任何用戶帳號。\n\n是否確定繼續？`;
+    const confirmMessage = `警告：您即將刪除 ${cutoffDateString} 之前的「所有」預約記錄。\n\n此操作僅會清除預約歷史，不會刪除任何用戶帳號。\n\n是否確定繼續？`;
     if (!window.confirm(confirmMessage)) {
       return;
     }
@@ -625,12 +630,11 @@ const handleClearHistory = async () => {
       const { error, count } = await supabase
         .from('bookings')
         .delete({ count: 'exact' }) // 要求回傳刪除筆數
-        .lt('date', `${cleanupYear}-01-01`);
+        .lt('date', cutoffDateString);
 
       if (error) throw error;
 
-      alert(`清理完成！已刪除 ${cleanupYear} 年以前的舊記錄。`);
-      setShowClearHistoryModal(false);
+      alert(`清理完成！已刪除 ${count || 0} 筆早於 ${cutoffYear} 年的舊記錄。`);
       
       // 重新載入當前歷史列表（如果有顯示的話）
       if (selectedMonth) {
@@ -643,6 +647,7 @@ const handleClearHistory = async () => {
       setLoading(false);
     }
   };
+
 
   const handleSaveSettings = async () => {
     // 保持原樣
@@ -761,7 +766,6 @@ const handleClearHistory = async () => {
     link.setAttribute('href', url);
     link.setAttribute('download', `預約記錄_${selectedMonth}.csv`);    link.style.visibility = 'hidden';
     document.body.appendChild(link);
-    link.click();
     document.body.removeChild(link);
   };
 
@@ -1035,8 +1039,8 @@ const handleClearHistory = async () => {
     );
   }
 
-// ===============================================
-  // 【新增：歷史記錄提醒視窗】
+  // ===============================================
+  // 【新增：歷史記錄提醒視窗】 - 修正後版本
   // ===============================================
   if (showHistoryNotice && currentUser?.is_admin) {
     return (
@@ -1054,6 +1058,7 @@ const handleClearHistory = async () => {
               <p className="text-sm text-gray-700 mb-3"><strong>數據維護注意事項 Notes:</strong></p>
               <ul className="text-sm text-gray-600 space-y-2">
                 <li className="list-none text-red-700 font-semibold">
+                  {/* 清理後的文本 */}
                   • 因後臺容量有限，記得**每年一月清理數據一次**！<br/>
                   <span className="ml-3 font-normal text-red-600">Please perform annual data cleanup (Settings &gt; Time Slot)</span>
                 </li>
@@ -1081,6 +1086,7 @@ const handleClearHistory = async () => {
     );
   }
   // ===============================================
+
 
   // 新增 Lab 彈窗
   if (showAddLabModal) {
@@ -1390,11 +1396,18 @@ const handleClearHistory = async () => {
   }
 // 時段設定面板
   if (showTimeSlotPanel && currentUser?.is_admin) {
+    // === 資料清理選項的年份回溯 ===
+    const years = [];
+    // 從當前年份回溯 5 年，以提供清理選項
+    for (let y = currentYear - 1; y >= currentYear - 5; y--) {
+        years.push(y);
+    }
+    
     return (
       <div className="min-h-screen bg-gray-50">
         <div className="bg-white shadow-sm border-b">
           <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
-            <h1 className="text-2xl font-bold text-gray-800">時段設定</h1>
+            <h1 className="text-2xl font-bold text-gray-800">時段與資料清理設定</h1> {/* 更改標題 */}
             <button
               onClick={() => setShowTimeSlotPanel(false)}
               className="flex items-center gap-2 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition"
@@ -1406,98 +1419,138 @@ const handleClearHistory = async () => {
         </div>
         
         <div className="max-w-4xl mx-auto p-4">
-          <div className="bg-white rounded-lg shadow-sm p-6">
-            <h2 className="text-xl font-bold mb-4">預約時段設定</h2>
-            <p className="text-sm text-gray-600 mb-6">設定日間和夜間的時段區間和間隔時間</p>
-            
-            {timeSlotSettings && (
-              <div className="space-y-6">
-                <div className="border-b pb-6">
-                  <h3 className="font-semibold text-lg mb-4">日間時段</h3>
-                  <div className="grid grid-cols-3 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">開始時間</label>
-                      <input
-                        type="time"
-                        value={timeSlotSettings.day_start}
-                        onChange={(e) => setTimeSlotSettings({...timeSlotSettings, day_start: e.target.value})}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg"
-                      />
+          <div className="bg-white rounded-lg shadow-sm p-6 space-y-6"> 
+            {/* 預約時段設定區塊 */}
+            <div className="border-b pb-6">
+                <h2 className="text-xl font-bold mb-4">預約時段設定</h2>
+                <p className="text-sm text-gray-600 mb-6">設定日間和夜間的時段區間和間隔時間</p>
+                
+                {timeSlotSettings && (
+                <div className="space-y-6">
+                    <div className="border-b pb-6">
+                    <h3 className="font-semibold text-lg mb-4">日間時段</h3>
+                    <div className="grid grid-cols-3 gap-4">
+                        <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">開始時間</label>
+                        <input
+                            type="time"
+                            value={timeSlotSettings.day_start}
+                            onChange={(e) => setTimeSlotSettings({...timeSlotSettings, day_start: e.target.value})}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                        />
+                        </div>
+                        <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">結束時間</label>
+                        <input
+                            type="time"
+                            value={timeSlotSettings.day_end}
+                            onChange={(e) => setTimeSlotSettings({...timeSlotSettings, day_end: e.target.value})}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                        />
+                        </div>
+                        <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">時段間隔（分鐘）</label>
+                        <select
+                            value={timeSlotSettings.day_interval}
+                            onChange={(e) => setTimeSlotSettings({...timeSlotSettings, day_interval: parseInt(e.target.value)})}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                        >
+                            <option value="15">15 分鐘</option>
+                            <option value="30">30 分鐘</option>
+                            <option value="60">60 分鐘</option>
+                        </select>
+                        </div>
                     </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">結束時間</label>
-                      <input
-                        type="time"
-                        value={timeSlotSettings.day_end}
-                        onChange={(e) => setTimeSlotSettings({...timeSlotSettings, day_end: e.target.value})}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg"
-                      />
+                    <p className="text-xs text-gray-500 mt-2">
+                        例如：09:00-18:00，每 15 分鐘一個時段
+                    </p>
                     </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">時段間隔（分鐘）</label>
-                      <select
-                        value={timeSlotSettings.day_interval}
-                        onChange={(e) => setTimeSlotSettings({...timeSlotSettings, day_interval: parseInt(e.target.value)})}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg"
-                      >
-                        <option value="15">15 分鐘</option>
-                        <option value="30">30 分鐘</option>
-                        <option value="60">60 分鐘</option>
-                      </select>
+
+                    <div className="border-b pb-6">
+                    <h3 className="font-semibold text-lg mb-4">夜間時段</h3>
+                    <div className="grid grid-cols-3 gap-4">
+                        <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">開始時間</label>
+                        <input
+                            type="time"
+                            value={timeSlotSettings.night_start}
+                            onChange={(e) => setTimeSlotSettings({...timeSlotSettings, night_start: e.target.value})}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                        />
+                        </div>
+                        <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">結束時間（隔天）</label>
+                        <input
+                            type="time"
+                            value={timeSlotSettings.night_end}
+                            onChange={(e) => setTimeSlotSettings({...timeSlotSettings, night_end: e.target.value})}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                        />
+                        </div>
+                        <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">時段間隔（分鐘）</label>
+                        <select
+                            value={timeSlotSettings.night_interval}
+                            onChange={(e) => setTimeSlotSettings({...timeSlotSettings, night_interval: parseInt(e.target.value)})}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                        >
+                            <option value="15">15 分鐘</option>
+                            <option value="30">30 分鐘</option>
+                            <option value="60">60 分鐘</option>
+                        </select>
+                        </div>
                     </div>
-                  </div>
-                  <p className="text-xs text-gray-500 mt-2">
-                    例如：09:00-18:00，每 15 分鐘一個時段
-                  </p>
+                    <p className="text-xs text-gray-500 mt-2">
+                        例如：18:00-隔天09:00，每 30 分鐘一個時段
+                    </p>
+                    </div>
+                    
+                    <button
+                    onClick={handleSaveTimeSlotSettings}
+                    className="w-full mt-6 px-4 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition font-medium"
+                    >
+                    儲存時段設定
+                    </button>
+                </div>
+                )}
+            </div>
+
+            {/* 資料清理區塊 - 新增內容 (使用原有樣式) */}
+            <div className="border-t pt-6 mt-6 space-y-4"> 
+                <h3 className="font-semibold text-lg mb-4 text-red-600">
+                    歷史預約記錄清理
+                </h3>
+                <p className="text-sm text-gray-600">
+                    請謹慎選擇截止年份，此操作將永久刪除所有早於所選年份底部的預約記錄。
+                </p>
+                
+                <div className="flex items-center gap-4">
+                    <label htmlFor="cleanupYear" className="text-sm font-medium text-gray-700">
+                        刪除截止年份：
+                    </label>
+                    <select
+                        id="cleanupYear"
+                        value={cleanupYear}
+                        onChange={(e) => setCleanupYear(Number(e.target.value))}
+                        className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500"
+                    >
+                        <option value="">請選擇年份</option>
+                        {/* 產生年份選項：從當前年份回溯 5 年 */}
+                        {years.map(year => (
+                            <option key={year} value={year}>早於 {year} 年底</option>
+                        ))}
+                    </select>
                 </div>
 
-                <div className="border-b pb-6">
-                  <h3 className="font-semibold text-lg mb-4">夜間時段</h3>
-                  <div className="grid grid-cols-3 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">開始時間</label>
-                      <input
-                        type="time"
-                        value={timeSlotSettings.night_start}
-                        onChange={(e) => setTimeSlotSettings({...timeSlotSettings, night_start: e.target.value})}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">結束時間（隔天）</label>
-                      <input
-                        type="time"
-                        value={timeSlotSettings.night_end}
-                        onChange={(e) => setTimeSlotSettings({...timeSlotSettings, night_end: e.target.value})}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">時段間隔（分鐘）</label>
-                      <select
-                        value={timeSlotSettings.night_interval}
-                        onChange={(e) => setTimeSlotSettings({...timeSlotSettings, night_interval: parseInt(e.target.value)})}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg"
-                      >
-                        <option value="15">15 分鐘</option>
-                        <option value="30">30 分鐘</option>
-                        <option value="60">60 分鐘</option>
-                      </select>
-                    </div>
-                  </div>
-                  <p className="text-xs text-gray-500 mt-2">
-                    例如：18:00-隔天09:00，每 30 分鐘一個時段
-                  </p>
-                </div>
-                
                 <button
-                  onClick={handleSaveTimeSlotSettings}
-                  className="w-full mt-6 px-4 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition font-medium"
+                    onClick={handleClearHistory}
+                    className={`w-full px-4 py-3 text-white font-bold rounded-lg shadow-md transition flex items-center justify-center ${loading || !cleanupYear ? 'bg-gray-400 cursor-not-allowed' : 'bg-red-600 hover:bg-red-700'}`}
+                    disabled={loading || !cleanupYear}
                 >
-                  儲存時段設定
+                    {loading ? '清理中...' : `執行清理 (刪除早於 ${cleanupYear} 年底的數據)`}
                 </button>
-              </div>
-            )}
+            </div>
+            {/* 資料清理區塊結束 */}
           </div>
         </div>
       </div>
@@ -1589,7 +1642,7 @@ const handleClearHistory = async () => {
     );
   }
 
-// 歷史預約記錄面板 (已修改：加入清除舊資料按鈕)
+// 歷史預約記錄面板
   if (showHistoryPanel && currentUser?.is_admin) {
     return (
       <div className="min-h-screen bg-gray-50">
@@ -1597,16 +1650,6 @@ const handleClearHistory = async () => {
           <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
             <h1 className="text-2xl font-bold text-gray-800">歷史預約記錄</h1>
             <div className="flex gap-3">
-              {/* === 新增功能：清除舊資料按鈕 === */}
-              <button
-                onClick={() => setShowClearHistoryModal(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition"
-              >
-                <Trash2 className="w-4 h-4" />
-                清除舊資料
-              </button>
-              {/* ============================== */}
-
               <button
                 onClick={exportToCSV}
                 disabled={historyBookings.length === 0}
@@ -1619,12 +1662,10 @@ const handleClearHistory = async () => {
                 <Check className="w-4 h-4" />
                 匯出 CSV
               </button>
-              
               <button
-                    // 【修改這裡】：點擊時，先顯示提醒視窗，而不是直接進入面板
-                    onClick={() => setShowHistoryNotice(true)} 
-                    className="flex items-center gap-2 px-3 py-2 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 transition text-sm"
-                  >
+                onClick={() => setShowHistoryPanel(false)}
+                className="flex items-center gap-2 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition"
+              >
                 <X className="w-4 h-4" />
                 返回
               </button>
@@ -1633,7 +1674,7 @@ const handleClearHistory = async () => {
         </div>
         
         <div className="max-w-7xl mx-auto p-4">
-          {/* 月份選擇器 */}
+          {/* 新增：月份選擇器 */}
           <div className="bg-white rounded-lg shadow-sm p-4 mb-4">
             <div className="flex items-center gap-4">
               <label className="text-sm font-medium text-gray-700">選擇月份：</label>
@@ -1894,82 +1935,7 @@ const handleClearHistory = async () => {
   }
 
   // 主預約界面
-  // timeSlots 變數已在上面使用 useMemo 計算，依賴於 timeSlotSettings
-
-// 清除歷史記錄彈窗 (新增)
-  if (showClearHistoryModal && currentUser?.is_admin) {
-    return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-        <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6 border-t-4 border-red-500">
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
-              <Trash2 className="w-6 h-6 text-red-600" />
-              清除舊資料
-            </h2>
-            <button onClick={() => setShowClearHistoryModal(false)} className="text-gray-500 hover:text-gray-700">
-              <X className="w-6 h-6" />
-            </button>
-          </div>
-
-          <div className="bg-red-50 border border-red-100 rounded-lg p-4 mb-6">
-            <div className="flex items-start gap-3">
-              <AlertCircle className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" />
-              <div>
-                <p className="text-red-800 text-sm font-bold mb-1">警告 Warning</p>
-                <p className="text-red-700 text-sm leading-relaxed">
-                  此操作將永久刪除指定年份之前的預約記錄。
-                  <br/>
-                  <span className="font-semibold">注意：</span>此操作無法復原，但<span className="underline">不會刪除</span>任何用戶帳號。
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                清除截止年份 (Cutoff Year)
-              </label>
-              <p className="text-xs text-gray-500 mb-2">
-                系統將刪除此年份 <span className="font-bold text-red-500">1月1日 之前</span> 的所有預約記錄。
-              </p>
-              <div className="relative">
-                <input
-                  type="number"
-                  value={cleanupYear}
-                  onChange={(e) => setCleanupYear(e.target.value)}
-                  min="2000"
-                  max={new Date().getFullYear()}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 text-lg font-medium"
-                  placeholder="例如：2024"
-                />
-                <span className="absolute right-4 top-3.5 text-gray-400 text-sm">年</span>
-              </div>
-              <p className="text-sm text-gray-600 mt-3 bg-gray-50 p-3 rounded-lg border border-gray-200">
-                範例：若輸入 <strong>2024</strong>，則 <strong>2023年12月31日</strong> (含)以前的所有舊記錄都會被刪除。
-              </p>
-            </div>
-          </div>
-
-          <div className="flex gap-3 mt-8">
-            <button
-              onClick={() => setShowClearHistoryModal(false)}
-              className="flex-1 px-4 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition font-medium"
-            >
-              取消
-            </button>
-            <button
-              onClick={handleClearHistory}
-              className="flex-1 px-4 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition font-medium flex items-center justify-center gap-2 shadow-lg shadow-red-200"
-            >
-              <Trash2 className="w-4 h-4" />
-              確認清除
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const timeSlots = useMemo(() => generateTimeSlots(), [generateTimeSlots]);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -1997,6 +1963,11 @@ const handleClearHistory = async () => {
                     <Settings className="w-4 h-4" />
                     用戶管理
                   </button>
+                  <button
+                    // 修改：點擊後先顯示提醒視窗
+                    onClick={() => setShowHistoryNotice(true)} 
+                    className="flex items-center gap-2 px-3 py-2 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 transition text-sm"
+                  >
                     <Calendar className="w-4 h-4" />
                     歷史記錄
                   </button>
@@ -2108,7 +2079,6 @@ const handleClearHistory = async () => {
                                 e.stopPropagation();
                                 handleCancelBooking(booking.id, slot);
                               }}
-                              // 在 Canvas 環境中，請將 window.confirm 替換為自定義模態框
                               className="mt-2 w-full px-2 py-1 bg-red-500 text-white rounded text-xs hover:bg-red-600 transition"
                             >
                               取消 Cancel
