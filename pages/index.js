@@ -1035,7 +1035,9 @@ const handleClearHistory = async () => {
     );
   }
 
-// 【新增：歷史記錄提醒視窗】
+// ===============================================
+  // 【新增：歷史記錄提醒視窗】
+  // ===============================================
   if (showHistoryNotice && currentUser?.is_admin) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
@@ -1053,7 +1055,7 @@ const handleClearHistory = async () => {
               <ul className="text-sm text-gray-600 space-y-2">
                 <li className="list-none text-red-700 font-semibold">
                   • 因後臺容量有限，記得**每年一月清理數據一次**！<br/>
-                  <span className="ml-3 font-normal text-red-600">Please perform annual data cleanup (Settings > Time Slot)</span>
+                  <span className="ml-3 font-normal text-red-600">Please perform annual data cleanup (Settings &gt; Time Slot)</span>
                 </li>
                 <li className="list-none">
                   • 手動刪除帳號會**保留**其歷史預約記錄。
@@ -1078,6 +1080,7 @@ const handleClearHistory = async () => {
       </div>
     );
   }
+  // ===============================================
 
   // 新增 Lab 彈窗
   if (showAddLabModal) {
