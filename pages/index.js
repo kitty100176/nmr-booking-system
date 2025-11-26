@@ -1618,9 +1618,10 @@ const handleClearHistory = async () => {
               </button>
               
               <button
-                onClick={() => setShowHistoryPanel(false)}
-                className="flex items-center gap-2 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition"
-              >
+                    // 【修改這裡】：點擊時，先顯示提醒視窗，而不是直接進入面板
+                    onClick={() => setShowHistoryNotice(true)} 
+                    className="flex items-center gap-2 px-3 py-2 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 transition text-sm"
+                  >
                 <X className="w-4 h-4" />
                 返回
               </button>
@@ -1993,11 +1994,6 @@ const handleClearHistory = async () => {
                     <Settings className="w-4 h-4" />
                     用戶管理
                   </button>
-                  <button
-                    // 【修改這裡】：點擊時，先顯示提醒視窗，而不是直接進入面板
-                    onClick={() => setShowHistoryNotice(true)} 
-                    className="flex items-center gap-2 px-3 py-2 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 transition text-sm"
-                  >
                     <Calendar className="w-4 h-4" />
                     歷史記錄
                   </button>
