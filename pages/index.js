@@ -21,7 +21,10 @@ export default function NMRBookingSystem() {
   const [showNotification, setShowNotification] = useState(false);
   // 【新增狀態】：控制歷史記錄提醒視窗
   const [showHistoryNotice, setShowHistoryNotice] = useState(false); 
+  
+  // 修正：移除重複的 loginForm 定義
   const [loginForm, setLoginForm] = useState({ username: '', password: '' });
+  
   const [selectedInstrument, setSelectedInstrument] = useState('');
   const [selectedDate, setSelectedDate] = useState('');
   const [selectedMonth, setSelectedMonth] = useState('');
@@ -110,7 +113,7 @@ export default function NMRBookingSystem() {
 
   }, [timeSlotSettings]);
 
-  // 使用 useMemo 來計算時段，當設定改變時才重新計算
+  // 修正：刪除重複定義，只保留此行
   const timeSlots = useMemo(() => generateTimeSlots(), [generateTimeSlots]);
   
   // ===============================================
@@ -1040,7 +1043,7 @@ export default function NMRBookingSystem() {
   }
 
   // ===============================================
-  // 【新增：歷史記錄提醒視窗】 - 修正後版本
+  // 【新增：歷史記錄提醒視窗】 - 修復後版本
   // ===============================================
   if (showHistoryNotice && currentUser?.is_admin) {
     return (
@@ -1108,7 +1111,7 @@ export default function NMRBookingSystem() {
                 value={newLabForm.name}
                 onChange={(e) => setNewLabForm({...newLabForm, name: e.target.value})}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-                placeholder="例如：003"
+                placeholder="例如：chen123"
               />
             </div>
 
@@ -1133,168 +1136,6 @@ export default function NMRBookingSystem() {
             </button>
             <button
               onClick={handleAddLab}
-              className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition"
-            >
-              新增
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // 編輯 Lab 彈窗
-  if (showEditLabModal && editingLab) {
-    return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-        <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-2xl font-bold text-gray-800">編輯 Lab</h2>
-            <button onClick={() => { setShowEditLabModal(false); setEditingLab(null); }} className="text-gray-500 hover:text-gray-700">
-              <X className="w-6 h-6" />
-            </button>
-          </div>
-
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Lab 名稱 *</label>
-              <input
-                type="text"
-                value={editingLab.name}
-                onChange={(e) => setEditingLab({...editingLab, name: e.target.value})}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">描述（選填）</label>
-              <input
-                type="text"
-                value={editingLab.description || ''}
-                onChange={(e) => setEditingLab({...editingLab, description: e.target.value})}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-              />
-            </div>
-          </div>
-
-          <div className="flex gap-3 mt-6">
-            <button
-              onClick={() => { setShowEditLabModal(false); setEditingLab(null); }}
-              className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition"
-            >
-              取消
-            </button>
-            <button
-              onClick={handleEditLab}
-              className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition"
-            >
-              儲存
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-// 新增用戶彈窗
-  if (showAddUserModal) {
-    return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-        <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-2xl font-bold text-gray-800">新增用戶</h2>
-            <button onClick={() => setShowAddUserModal(false)} className="text-gray-500 hover:text-gray-700">
-              <X className="w-6 h-6" />
-            </button>
-          </div>
-
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">帳號 *</label>
-              <input
-                type="text"
-                value={newUserForm.username}
-                onChange={(e) => setNewUserForm({...newUserForm, username: e.target.value})}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-                placeholder="例如：chen123"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">密碼 *</label>
-              <input
-                type="text"
-                value={newUserForm.password}
-                onChange={(e) => setNewUserForm({...newUserForm, password: e.target.value})}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-                placeholder="設定密碼"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">顯示名稱 *</label>
-              <input
-                type="text"
-                value={newUserForm.display_name}
-                onChange={(e) => setNewUserForm({...newUserForm, display_name: e.target.value})}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-                placeholder="例如：陳小明"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Lab 名稱 *</label>
-              <select
-                value={newUserForm.pi}
-                onChange={(e) => setNewUserForm({...newUserForm, pi: e.target.value})}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-              >
-                <option value="">請選擇 Lab</option>
-                {labs.map(lab => (
-                  <option key={lab.id} value={lab.name}>{lab.name} {lab.description && `(${lab.description})`}</option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">儀器權限</label>
-              <div className="flex gap-3">
-                {INSTRUMENTS.map(instrument => (
-                  <button
-                    key={instrument}
-                    onClick={() => toggleNewUserInstrument(instrument)}
-                    className={`px-4 py-2 rounded-lg font-medium transition ${
-                      newUserForm.instruments.includes(instrument)
-                        ? 'bg-green-500 text-white'
-                        : 'bg-gray-200 text-gray-600'
-                    }`}
-                  >
-                    {instrument} MHz {newUserForm.instruments.includes(instrument) ? '✓' : ''}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="is_admin"
-                checked={newUserForm.is_admin}
-                onChange={(e) => setNewUserForm({...newUserForm, is_admin: e.target.checked})}
-                className="w-4 h-4 text-indigo-600 rounded"
-              />
-              <label htmlFor="is_admin" className="text-sm text-gray-700">設為管理員</label>
-            </div>
-          </div>
-
-          <div className="flex gap-3 mt-6">
-            <button
-              onClick={() => setShowAddUserModal(false)}
-              className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition"
-            >
-              取消
-            </button>
-            <button
-              onClick={handleAddUser}
               className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition"
             >
               新增
