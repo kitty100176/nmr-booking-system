@@ -1052,7 +1052,7 @@ const handleClearHistory = async () => {
               <p className="text-sm text-gray-700 mb-3"><strong>數據維護注意事項 Notes:</strong></p>
               <ul className="text-sm text-gray-600 space-y-2">
                 <li className="list-none text-red-700 font-semibold">
-                  • 因後臺容量有限，記得**每年一月清理數據一次**！！！<br/>
+                  • 因後臺容量有限，記得**每年一月清理數據一次**！<br/>
                   <span className="ml-3 font-normal text-red-600">Please perform annual data cleanup (Settings > Time Slot)</span>
                 </li>
                 <li className="list-none">
