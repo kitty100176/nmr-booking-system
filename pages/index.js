@@ -1081,6 +1081,89 @@ if (showHistoryNotice && currentUser?.is_admin) {
 }
 // ===============================================
 
+  // 【新增：清除歷史記錄彈窗】
+  if (showClearHistoryModal && currentUser?.is_admin) {
+    // === 程式碼請確保完整貼上，使用您上次提供的代碼塊 ===
+    const currentYear = new Date().getFullYear();
+    const years = [];
+    for (let y = currentYear - 1; y >= currentYear - 5; y--) {
+        years.push(y);
+    }
+
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+        <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6 border-t-4 border-red-500">
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+              <Trash2 className="w-6 h-6 text-red-600" />
+              清除舊資料
+            </h2>
+            <button onClick={() => setShowClearHistoryModal(false)} className="text-gray-500 hover:text-gray-700">
+              <X className="w-6 h-6" />
+            </button>
+          </div>
+
+          <div className="bg-red-50 border border-red-100 rounded-lg p-4 mb-6">
+            <div className="flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" />
+              <div>
+                <p className="text-red-800 text-sm font-bold mb-1">警告 Warning</p>
+                <p className="text-red-700 text-sm leading-relaxed">
+                  此操作將永久刪除指定年份之前的預約記錄。
+                  <br/>
+                  <span className="font-semibold">注意：</span>此操作無法復原，但<span className="underline">不會刪除</span>任何用戶帳號。
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                清除截止年份 (Cutoff Year)
+              </label>
+              <p className="text-xs text-gray-500 mb-2">
+                系統將刪除此年份 <span className="font-bold text-red-500">1月1日 之前</span> 的所有預約記錄。
+              </p>
+              <div className="relative">
+                <input
+                  type="number"
+                  value={cleanupYear}
+                  onChange={(e) => setCleanupYear(e.target.value)}
+                  min="2000"
+                  max={currentYear}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 text-lg font-medium"
+                  placeholder="例如：2024"
+                />
+                <span className="absolute right-4 top-3.5 text-gray-400 text-sm">年</span>
+              </div>
+              <p className="text-sm text-gray-600 mt-3 bg-gray-50 p-3 rounded-lg border border-gray-200">
+                範例：若輸入 <strong>{currentYear}</strong>，則 <strong>{currentYear - 1}年12月31日</strong> (含)以前的所有舊記錄都會被刪除。
+              </p>
+            </div>
+          </div>
+
+          <div className="flex gap-3 mt-8">
+            <button
+              onClick={() => setShowClearHistoryModal(false)}
+              className="flex-1 px-4 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition font-medium"
+            >
+              取消
+            </button>
+            <button
+              onClick={handleClearHistory}
+              className="flex-1 px-4 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition font-medium flex items-center justify-center gap-2 shadow-lg shadow-red-200"
+            >
+              <Trash2 className="w-4 h-4" />
+              確認清除
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+
   // 新增 Lab 彈窗
   if (showAddLabModal) {
     return (
