@@ -722,7 +722,7 @@ export default function NMRBookingSystem() {
     }
   };
 
-  // === 計費相關輔助元件 (包含連續優惠邏輯) ===
+  // === 計費相關輔助元件 (包含連續優惠邏輯 + 修正為小數點 2 位) ===
   const BillingModal = () => {
     
     // 1. 將單個預約轉換為標準的開始與結束時間物件 (單位：分鐘)
@@ -934,8 +934,8 @@ export default function NMRBookingSystem() {
           <div className="flex items-center gap-4">
              <div className="text-right">
                 <p className="text-sm text-gray-500">
-                    計費 {data.totalBillableHours.toFixed(1)} hr 
-                    <span className="text-xs text-gray-400 ml-1">(實際 {data.totalHours.toFixed(1)} hr)</span>
+                    計費 {data.totalBillableHours.toFixed(2)} hr 
+                    <span className="text-xs text-gray-400 ml-1">(實際 {data.totalHours.toFixed(2)} hr)</span>
                 </p>
                 <p className="font-bold text-green-700 text-lg">${Math.round(totalCost).toLocaleString()}</p>
              </div>
@@ -958,8 +958,8 @@ export default function NMRBookingSystem() {
                   <tr key={user}>
                     <td className="px-4 py-2 font-medium">{user}</td>
                     <td className="px-4 py-2 text-right">
-                        <span className="text-gray-400 text-xs mr-2">{info.totalHours.toFixed(1)}</span>
-                        <span className="font-bold">{info.billableHours.toFixed(1)} hr</span>
+                        <span className="text-gray-400 text-xs mr-2">{info.totalHours.toFixed(2)}</span>
+                        <span className="font-bold">{info.billableHours.toFixed(2)} hr</span>
                     </td>
                     <td className="px-4 py-2 text-left">
                         {info.discountCount > 0 && (
@@ -1402,7 +1402,7 @@ export default function NMRBookingSystem() {
     );
   }
 
-  // === 這裡是關鍵：將 Lab Management Panel 的判斷加回 ===
+  // === Lab Management Panel ===
   if (showLabManagementPanel && currentUser?.is_admin) {
     return (
       <div className="min-h-screen bg-gray-50">
@@ -1443,7 +1443,6 @@ export default function NMRBookingSystem() {
       </div>
     );
   }
-  // ========================================================
 
   if (showHistoryPanel && currentUser?.is_admin) {
     return (
