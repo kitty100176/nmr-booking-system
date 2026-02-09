@@ -833,7 +833,7 @@ export default function NMRBookingSystem() {
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
         <div className="bg-white rounded-xl shadow-2xl max-w-5xl w-full h-[80vh] flex overflow-hidden relative">
           
-          {/* === 新增：右上角大 X 關閉按鈕 === */}
+          {/* === 右上角大 X 關閉按鈕 === */}
           <button 
              onClick={() => setShowBillingModal(false)}
              className="absolute top-4 right-4 p-2 bg-gray-100 rounded-full hover:bg-gray-200 transition z-10"
@@ -841,8 +841,7 @@ export default function NMRBookingSystem() {
           >
              <X className="w-5 h-5 text-gray-500" />
           </button>
-          {/* ================================= */}
-
+          
           {/* 左側控制區 */}
           <div className="w-1/3 bg-gray-50 p-6 border-r flex flex-col">
             <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2 mb-6">
@@ -895,7 +894,7 @@ export default function NMRBookingSystem() {
           </div>
 
           {/* 右側列表區 */}
-          <div className="w-2/3 p-6 overflow-y-auto pt-12"> {/* 增加 pt 避免標題被 X 遮住 */}
+          <div className="w-2/3 p-6 overflow-y-auto pt-12">
             <h3 className="text-xl font-bold text-gray-800 mb-4">費用報表</h3>
             <div className="space-y-4">
               {Object.entries(billingData).map(([labName, data]) => (
@@ -1402,6 +1401,49 @@ export default function NMRBookingSystem() {
       </div>
     );
   }
+
+  // === 這裡是關鍵：將 Lab Management Panel 的判斷加回 ===
+  if (showLabManagementPanel && currentUser?.is_admin) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <div className="bg-white shadow-sm border-b">
+          <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
+            <h1 className="text-2xl font-bold text-gray-800">Lab 管理</h1>
+            <div className="flex gap-3">
+              <button onClick={() => setShowAddLabModal(true)} className="flex items-center gap-2 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition"><UserPlus className="w-4 h-4" />新增 Lab</button>
+              <button onClick={() => setShowLabManagementPanel(false)} className="flex items-center gap-2 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition"><X className="w-4 h-4" />返回</button>
+            </div>
+          </div>
+        </div>
+        <div className="max-w-7xl mx-auto p-4">
+          <div className="bg-white rounded-lg shadow-sm p-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {labs.map(lab => {
+                const usersCount = users.filter(u => u.pi === lab.name).length;
+                return (
+                  <div key={lab.id} className="border rounded-lg p-4">
+                    <div className="flex justify-between items-start mb-3">
+                      <div className="flex-1">
+                        <p className="font-semibold text-lg">{lab.name}</p>
+                        {lab.description && <p className="text-sm text-gray-600">{lab.description}</p>}
+                        <p className="text-xs text-gray-500 mt-1">{usersCount} 個用戶使用中</p>
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <button onClick={() => { setEditingLab({...lab}); setShowEditLabModal(true); }} className="flex-1 px-3 py-1 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition text-sm">編輯</button>
+                      <button onClick={() => handleDeleteLab(lab.id, lab.name)} disabled={usersCount > 0} className={`flex-1 px-3 py-1 rounded-lg transition text-sm ${usersCount > 0 ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-red-100 text-red-700 hover:bg-red-200'}`}>刪除</button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            {labs.length === 0 && <div className="text-center py-12 text-gray-500">暫無 Lab 資料，請點擊右上角「新增 Lab」</div>}
+          </div>
+        </div>
+      </div>
+    );
+  }
+  // ========================================================
 
   if (showHistoryPanel && currentUser?.is_admin) {
     return (
