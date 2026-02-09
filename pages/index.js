@@ -204,7 +204,6 @@ export default function NMRBookingSystem() {
       
       if (data) {
         setSystemSettings(data);
-        // 載入費率，如果沒有就預設 100
         if (data.hourly_rate) setHourlyRate(data.hourly_rate);
       } else {
         const defaultSettings = {
@@ -426,7 +425,7 @@ export default function NMRBookingSystem() {
           instruments: newUserForm.instruments,
           is_admin: newUserForm.is_admin,
           active: true,
-          violation_log: '' // 初始化違規紀錄
+          violation_log: ''
         }]);
       if (error) {
         if (error.code === '23505') {
@@ -536,7 +535,7 @@ export default function NMRBookingSystem() {
         rule5: systemSettings.rule5,
         rule6: systemSettings.rule6,
         rule7: systemSettings.rule7,
-        hourly_rate: hourlyRate // 儲存費率
+        hourly_rate: hourlyRate
       };
 
       if (existing) {
@@ -696,7 +695,7 @@ export default function NMRBookingSystem() {
     return bookings.find(b => b.time_slot === timeSlot);
   };
 
-  // === 新增：違規事項相關函式 ===
+  // === 違規事項相關函式 ===
   const openViolationModal = (user) => {
     setCurrentViolationUser(user);
     setViolationText(user.violation_log || '');
@@ -716,17 +715,16 @@ export default function NMRBookingSystem() {
       alert('違規事項已儲存');
       setShowViolationModal(false);
       setCurrentViolationUser(null);
-      await loadUsers(); // 重新整理用戶列表
+      await loadUsers();
     } catch (error) {
       console.error('儲存違規事項失敗:', error);
       alert('儲存失敗，請稍後再試');
     }
   };
-  // ==========================
 
-  // === 新增：計費相關輔助元件 ===
+  // === 計費相關輔助元件 ===
   const BillingModal = () => {
-    // 1. 計算時數的輔助函式
+    // 1. 計算時數
     const calculateDurationInHours = (timeSlot) => {
       const [start, end] = timeSlot.split('-');
       const [startH, startM] = start.split(':').map(Number);
@@ -735,7 +733,6 @@ export default function NMRBookingSystem() {
       let startTotal = startH * 60 + startM;
       let endTotal = endH * 60 + endM;
       
-      // 處理跨日 (例如 23:00-00:00)
       if (endTotal < startTotal) endTotal += 24 * 60;
       
       return (endTotal - startTotal) / 60;
@@ -744,35 +741,22 @@ export default function NMRBookingSystem() {
     // 2. 整理每個 Lab 和用戶的數據
     const billingData = useMemo(() => {
       const data = {};
-      
-      // 初始化 Labs
       labs.forEach(lab => {
-        data[lab.name] = {
-          totalHours: 0,
-          users: {}
-        };
+        data[lab.name] = { totalHours: 0, users: {} };
       });
 
-      // 遍歷所有歷史預約
       historyBookings.forEach(booking => {
         const duration = calculateDurationInHours(booking.time_slot);
         const labName = booking.pi;
         const userName = booking.display_name;
 
-        // 確保 Lab 存在 (防止 Lab 被刪除但紀錄還在的情況)
         if (!data[labName]) {
             data[labName] = { totalHours: 0, users: {} };
         }
-
-        // 累加 Lab 總時數
         data[labName].totalHours += duration;
-
-        // 初始化 User
         if (!data[labName].users[userName]) {
           data[labName].users[userName] = 0;
         }
-
-        // 累加 User 時數
         data[labName].users[userName] += duration;
       });
 
@@ -781,15 +765,12 @@ export default function NMRBookingSystem() {
 
     // 3. 儲存費率
     const saveHourlyRate = async () => {
-      // 這裡直接借用 handleSaveSettings 的邏輯部分更新，或是只更新 local state
-      // 為了 UX，我們在 onBlur 或點擊儲存時更新
       try {
         const { error } = await supabase
           .from('system_settings')
           .update({ hourly_rate: hourlyRate })
           .eq('id', 1);
         if (error) throw error;
-        // 不特別 alert，默默儲存即可
       } catch (e) {
         console.error("費率儲存失敗", e);
       }
@@ -804,6 +785,18 @@ export default function NMRBookingSystem() {
               <DollarSign className="w-6 h-6 text-green-600" />
               計費設定
             </h2>
+
+            {/* === 新增：月份選擇器 === */}
+            <div className="bg-white p-4 rounded-lg shadow-sm mb-4">
+               <label className="block text-sm font-medium text-gray-700 mb-2">選擇計費月份</label>
+               <input
+                 type="month"
+                 value={selectedMonth}
+                 onChange={(e) => setSelectedMonth(e.target.value)}
+                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+               />
+            </div>
+            {/* ======================= */}
             
             <div className="bg-white p-4 rounded-lg shadow-sm mb-6">
               <label className="block text-sm font-medium text-gray-700 mb-2">每小時費率 (NTD)</label>
@@ -849,7 +842,9 @@ export default function NMRBookingSystem() {
                 />
               ))}
               {Object.keys(billingData).length === 0 && (
-                 <div className="text-center text-gray-400 py-10">尚無資料</div>
+                 <div className="text-center text-gray-400 py-10">
+                   {selectedMonth ? '本月份尚無預約資料' : '請選擇月份以查看報表'}
+                 </div>
               )}
             </div>
           </div>
@@ -858,7 +853,6 @@ export default function NMRBookingSystem() {
     );
   };
 
-  // 獨立組件處理折疊邏輯
   const LabBillingRow = ({ labName, data, rate }) => {
     const [isOpen, setIsOpen] = useState(false);
     const totalCost = data.totalHours * rate;
@@ -911,10 +905,7 @@ export default function NMRBookingSystem() {
       </div>
     );
   };
-  // ======================================
 
-
-  // 渲染登入畫面
   if (!isLoggedIn) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
@@ -1051,7 +1042,6 @@ export default function NMRBookingSystem() {
     );
   }
 
-  // 彈窗與其他面板渲染
   if (showClearHistoryModal && currentUser?.is_admin) {
     const currentYear = new Date().getFullYear();
     return (
@@ -1109,7 +1099,6 @@ export default function NMRBookingSystem() {
     );
   }
 
-  // === 新增：違規紀錄 Modal ===
   if (showViolationModal && currentViolationUser) {
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
@@ -1123,12 +1112,10 @@ export default function NMRBookingSystem() {
               <X className="w-6 h-6" />
             </button>
           </div>
-
           <div className="mb-4">
             <p className="text-gray-700 font-medium">用戶: {currentViolationUser.display_name} ({currentViolationUser.username})</p>
             <p className="text-sm text-gray-500">Lab: {currentViolationUser.pi}</p>
           </div>
-
           <div className="space-y-4">
             <label className="block text-sm font-medium text-gray-700">違規事項紀錄</label>
             <textarea
@@ -1140,18 +1127,9 @@ export default function NMRBookingSystem() {
             />
             <p className="text-xs text-gray-500">此紀錄僅供管理員查看，不會顯示給用戶。</p>
           </div>
-
           <div className="flex gap-3 mt-6">
-            <button
-              onClick={() => setShowViolationModal(false)}
-              className="flex-1 px-4 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition font-medium"
-            >
-              取消
-            </button>
-            <button
-              onClick={handleSaveViolation}
-              className="flex-1 px-4 py-3 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition font-medium flex items-center justify-center gap-2 shadow-lg shadow-yellow-200"
-            >
+            <button onClick={() => setShowViolationModal(false)} className="flex-1 px-4 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition font-medium">取消</button>
+            <button onClick={handleSaveViolation} className="flex-1 px-4 py-3 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition font-medium flex items-center justify-center gap-2 shadow-lg shadow-yellow-200">
               <Save className="w-4 h-4" />
               儲存紀錄
             </button>
@@ -1161,13 +1139,11 @@ export default function NMRBookingSystem() {
     );
   }
 
-  // === 新增：計費 Modal 呼叫 ===
   if (showBillingModal) {
     return <BillingModal />;
   }
 
   if (showAddLabModal) {
-    // 保持 Add Lab Modal 代碼
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
         <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
@@ -1189,7 +1165,6 @@ export default function NMRBookingSystem() {
   }
 
   if (showEditLabModal && editingLab) {
-    // 保持 Edit Lab Modal 代碼
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
         <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
@@ -1211,7 +1186,6 @@ export default function NMRBookingSystem() {
   }
 
   if (showAddUserModal) {
-    // 保持 Add User Modal 代碼
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
         <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
@@ -1237,7 +1211,6 @@ export default function NMRBookingSystem() {
   }
 
   if (showEditUserModal && editingUser) {
-    // 保持 Edit User Modal 代碼
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
         <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
@@ -1262,7 +1235,6 @@ export default function NMRBookingSystem() {
   }
 
   if (showTimeSlotPanel && currentUser?.is_admin) {
-    // 保持 TimeSlot Panel
     return (
       <div className="min-h-screen bg-gray-50">
         <div className="bg-white shadow-sm border-b">
@@ -1305,7 +1277,6 @@ export default function NMRBookingSystem() {
   }
 
   if (showSettingsPanel && currentUser?.is_admin) {
-    // 保持 Settings Panel
     return (
       <div className="min-h-screen bg-gray-50">
         <div className="bg-white shadow-sm border-b">
@@ -1324,330 +1295,4 @@ export default function NMRBookingSystem() {
                   {[1, 2, 3, 4, 5, 6, 7].map(num => (
                     <div key={num}>
                       <label className="block text-sm font-medium text-gray-700 mb-2">規則 {num}</label>
-                      <textarea value={systemSettings[`rule${num}`]} onChange={(e) => setSystemSettings({ ...systemSettings, [`rule${num}`]: e.target.value })} rows={3} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 resize-y" placeholder={`輸入規則 ${num} 的內容...`}/>
-                    </div>
-                  ))}
-                  <button onClick={handleSaveSettings} className="w-full mt-6 px-4 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition font-medium">儲存設定</button>
-                </div>
-              )}
-            </div>
-            <div className="lg:sticky lg:top-20 lg:self-start">
-              <div className="bg-white rounded-lg shadow-sm p-6">
-                <h2 className="text-xl font-bold mb-2">即時預覽</h2>
-                <div className="bg-indigo-600 text-white p-6 rounded-lg max-h-[600px] overflow-y-auto">
-                  <h3 className="text-xl font-bold mb-4 sticky top-0 bg-indigo-600 pb-2">使用規則</h3>
-                  <div className="space-y-3">
-                    {systemSettings && [1, 2, 3, 4, 5, 6, 7].map(num => (
-                      systemSettings[`rule${num}`] && (
-                        <div key={num} className="flex items-start gap-3"><Check className="w-5 h-5 mt-0.5 flex-shrink-0" /><p className="text-sm whitespace-pre-wrap">{systemSettings[`rule${num}`]}</p></div>
-                      )
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // 歷史預約記錄面板 (已修改：加入計費功能按鈕)
-  if (showHistoryPanel && currentUser?.is_admin) {
-    return (
-      <div className="min-h-screen bg-gray-50">
-        <div className="bg-white shadow-sm border-b">
-          <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
-            <h1 className="text-2xl font-bold text-gray-800">歷史預約記錄</h1>
-            <div className="flex gap-3">
-              {/* === 新增功能：計費報表按鈕 === */}
-              <button
-                onClick={() => setShowBillingModal(true)}
-                disabled={historyBookings.length === 0}
-                className="flex items-center gap-2 px-4 py-2 bg-yellow-100 text-yellow-700 rounded-lg hover:bg-yellow-200 transition"
-              >
-                <DollarSign className="w-4 h-4" />
-                計費報表
-              </button>
-              {/* =========================== */}
-
-              <button
-                onClick={() => setShowClearHistoryModal(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition"
-              >
-                <Trash2 className="w-4 h-4" />
-                清除舊資料
-              </button>
-
-              <button
-                onClick={exportToCSV}
-                disabled={historyBookings.length === 0}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg transition ${
-                  historyBookings.length === 0
-                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                    : 'bg-green-500 text-white hover:bg-green-600'
-                }`}
-              >
-                <Check className="w-4 h-4" />
-                匯出 CSV
-              </button>
-              
-              <button onClick={() => setShowHistoryPanel(false)} className="flex items-center gap-2 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition"><X className="w-4 h-4" />返回</button>
-            </div>
-          </div>
-        </div>
-        
-        <div className="max-w-7xl mx-auto p-4">
-          <div className="bg-white rounded-lg shadow-sm p-4 mb-4">
-            <div className="flex items-center gap-4">
-              <label className="text-sm font-medium text-gray-700">選擇月份：</label>
-              <input type="month" value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"/>
-              <span className="text-sm text-gray-600">{historyBookings.length} 筆記錄</span>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">預約時間</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">用戶</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">實驗室</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">儀器</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">日期</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">時段</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200">
-                  {historyBookings.map(booking => (
-                    <tr key={booking.id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{new Date(booking.booked_at).toLocaleString('zh-TW')}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{booking.display_name}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{booking.pi} Lab</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{booking.instrument} MHz</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{booking.date}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{booking.time_slot}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            {historyBookings.length === 0 && (
-              <div className="text-center py-12 text-gray-500">{selectedMonth ? `${selectedMonth} 無預約記錄` : '請選擇月份查看記錄'}</div>
-            )}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (showLabManagementPanel && currentUser?.is_admin) {
-    // 保持 Lab Management Panel
-    return (
-      <div className="min-h-screen bg-gray-50">
-        <div className="bg-white shadow-sm border-b">
-          <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
-            <h1 className="text-2xl font-bold text-gray-800">Lab 管理</h1>
-            <div className="flex gap-3">
-              <button onClick={() => setShowAddLabModal(true)} className="flex items-center gap-2 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition"><UserPlus className="w-4 h-4" />新增 Lab</button>
-              <button onClick={() => setShowLabManagementPanel(false)} className="flex items-center gap-2 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition"><X className="w-4 h-4" />返回</button>
-            </div>
-          </div>
-        </div>
-        <div className="max-w-7xl mx-auto p-4">
-          <div className="bg-white rounded-lg shadow-sm p-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {labs.map(lab => {
-                const usersCount = users.filter(u => u.pi === lab.name).length;
-                return (
-                  <div key={lab.id} className="border rounded-lg p-4">
-                    <div className="flex justify-between items-start mb-3">
-                      <div className="flex-1">
-                        <p className="font-semibold text-lg">{lab.name}</p>
-                        {lab.description && <p className="text-sm text-gray-600">{lab.description}</p>}
-                        <p className="text-xs text-gray-500 mt-1">{usersCount} 個用戶使用中</p>
-                      </div>
-                    </div>
-                    <div className="flex gap-2">
-                      <button onClick={() => { setEditingLab({...lab}); setShowEditLabModal(true); }} className="flex-1 px-3 py-1 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition text-sm">編輯</button>
-                      <button onClick={() => handleDeleteLab(lab.id, lab.name)} disabled={usersCount > 0} className={`flex-1 px-3 py-1 rounded-lg transition text-sm ${usersCount > 0 ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-red-100 text-red-700 hover:bg-red-200'}`}>刪除</button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-            {labs.length === 0 && <div className="text-center py-12 text-gray-500">暫無 Lab 資料，請點擊右上角「新增 Lab」</div>}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // 管理員面板 (已修改：加入違規紀錄按鈕)
-  if (showAdminPanel && currentUser?.is_admin) {
-    return (
-      <div className="min-h-screen bg-gray-50">
-        <div className="bg-white shadow-sm border-b">
-          <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
-            <h1 className="text-2xl font-bold text-gray-800">用戶管理</h1>
-            <div className="flex gap-3">
-              <button onClick={() => setShowLabManagementPanel(true)} className="flex items-center gap-2 px-4 py-2 bg-teal-500 text-white rounded-lg hover:bg-teal-600 transition"><Settings className="w-4 h-4" />Lab 管理</button>
-              <button onClick={() => setShowAddUserModal(true)} className="flex items-center gap-2 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition"><UserPlus className="w-4 h-4" />新增用戶</button>
-              <button onClick={() => setShowAdminPanel(false)} className="flex items-center gap-2 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition"><X className="w-4 h-4" />返回</button>
-            </div>
-          </div>
-        </div>
-        
-        <div className="max-w-7xl mx-auto p-4">
-          <div className="bg-white rounded-lg shadow-sm p-6">
-            <div className="space-y-4">
-              {users.map(user => (
-                <div key={user.id} className={`border rounded-lg p-4 ${!user.active ? 'bg-gray-50 opacity-75' : ''}`}>
-                  <div className="flex justify-between items-start mb-3">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <p className="font-semibold text-lg">{user.display_name}</p>
-                        {user.active === false && <span className="px-2 py-1 bg-red-100 text-red-700 text-xs rounded-full">已停用</span>}
-                        {user.active !== false && <span className="px-2 py-1 bg-green-100 text-green-700 text-xs rounded-full">已啟用</span>}
-                        {user.is_admin && <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-full">管理員</span>}
-                      </div>
-                      <p className="text-sm text-gray-600">{user.username} - {user.pi} Lab</p>
-                    </div>
-                    
-                    <div className="flex gap-2">
-                       {/* === 新增：違規按鈕 === */}
-                       <button
-                        onClick={() => openViolationModal(user)}
-                        className="flex items-center gap-1 px-3 py-1 bg-yellow-100 text-yellow-700 rounded-lg hover:bg-yellow-200 transition text-sm"
-                      >
-                        <FileWarning className="w-3 h-3" />
-                        違規
-                      </button>
-                      {/* ==================== */}
-
-                      <button onClick={() => { setEditingUser({...user, password: ''}); setShowEditUserModal(true); }} className="flex items-center gap-1 px-3 py-1 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition text-sm"><Edit className="w-3 h-3" />編輯</button>
-                      <button onClick={() => toggleUserActive(user.id, user.active !== false)} className={`flex items-center gap-1 px-3 py-1 rounded-lg font-medium transition text-sm ${user.active !== false ? 'bg-orange-100 text-orange-700 hover:bg-orange-200' : 'bg-green-100 text-green-700 hover:bg-green-200'}`}>
-                        {user.active !== false ? <><UserX className="w-3 h-3" />停用</> : <><UserCheck className="w-3 h-3" />啟用</>}
-                      </button>
-                      <button onClick={() => handleDeleteUser(user.id, user.username)} className="flex items-center gap-1 px-3 py-1 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition text-sm"><Trash2 className="w-3 h-3" />刪除</button>
-                    </div>
-                  </div>
-                  <div className="flex gap-3">
-                    {INSTRUMENTS.map(instrument => (
-                      <button
-                        key={instrument}
-                        onClick={() => toggleUserInstrument(user.id, instrument)}
-                        disabled={user.active === false}
-                        className={`px-4 py-2 rounded-lg font-medium transition ${
-                          user.active === false
-                            ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                            : user.instruments?.includes(instrument)
-                            ? 'bg-green-500 text-white hover:bg-green-600'
-                            : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
-                        }`}
-                      >
-                        {instrument} MHz {user.instruments?.includes(instrument) ? '✓' : ''}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // 主頁面渲染
-  return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 py-4">
-          <div className="flex justify-between items-center">
-            <div className="flex items-center gap-3">
-              <Calendar className="w-6 h-6 text-indigo-600" />
-              <h1 className="text-2xl font-bold text-gray-800">NMR預約系統</h1>
-            </div>
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2 text-sm">
-                <User className="w-4 h-4 text-gray-600" />
-                <span className="font-medium">{currentUser?.display_name}</span>
-                <span className="text-gray-500">({currentUser?.pi} Lab)</span>
-              </div>
-              {currentUser?.is_admin && (
-                <>
-                  <button onClick={() => setShowAdminPanel(true)} className="flex items-center gap-2 px-3 py-2 bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 transition text-sm"><Settings className="w-4 h-4" />用戶管理</button>
-                  <button onClick={() => setShowHistoryNotice(true)} className="flex items-center gap-2 px-3 py-2 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 transition text-sm"><Calendar className="w-4 h-4" />歷史記錄</button>
-                  <button onClick={() => setShowTimeSlotPanel(true)} className="flex items-center gap-2 px-3 py-2 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition text-sm"><Clock className="w-4 h-4" />時段設定</button>
-                  <button onClick={() => setShowSettingsPanel(true)} className="flex items-center gap-2 px-3 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition text-sm"><Settings className="w-4 h-4" />系統設定</button>
-                </>
-              )}
-              <button onClick={handleLogout} className="flex items-center gap-2 px-3 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition text-sm"><LogOut className="w-4 h-4" />登出 Logout</button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="max-w-7xl mx-auto p-4">
-        <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">選擇儀器 Select Instrument</label>
-              <select value={selectedInstrument} onChange={(e) => setSelectedInstrument(e.target.value)} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
-                <option value="">請選擇儀器 Please select</option>
-                {currentUser?.instruments?.length === 0 ? (<option disabled>您尚無儀器使用權限 No instrument permission</option>) : (currentUser?.instruments?.map(instrument => (<option key={instrument} value={instrument}>{instrument} MHz NMR</option>)))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">選擇日期 Select Date</label>
-              <input type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} min={getTodayString()} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"/>
-            </div>
-          </div>
-        </div>
-
-        {selectedInstrument && selectedDate ? (
-          <div className="bg-white rounded-lg shadow-sm p-6">
-            <h2 className="text-xl font-bold mb-4">{selectedInstrument} MHz - {selectedDate}</h2>
-            {loading ? (
-              <div className="text-center py-12">
-                <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
-                <p className="mt-2 text-gray-500">載入中...</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
-                {timeSlots.map(slot => {
-                  const booking = getBookingForSlot(slot);
-                  const isPast = isTimePassed(selectedDate, slot);
-                  const isMyBooking = booking && booking.username === currentUser.username;
-
-                  return (
-                    <div key={slot} className={`border rounded-lg p-3 transition ${isPast ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : booking ? 'bg-blue-50 border-blue-200' : 'bg-white hover:bg-gray-50 cursor-pointer border-gray-300'}`} onClick={() => !booking && !isPast && handleBooking(slot)}>
-                      <div className="flex items-center gap-2 mb-2"><Clock className="w-4 h-4" /><span className="font-medium text-xs">{slot}</span></div>
-                      {booking ? (
-                        <div className="text-xs">
-                          <p className="font-semibold">{booking.display_name}</p>
-                          <p className="text-gray-600">{booking.pi} Lab</p>
-                          {isMyBooking && !isPast && (
-                            <button onClick={(e) => { e.stopPropagation(); handleCancelBooking(booking.id, slot); }} className="mt-2 w-full px-2 py-1 bg-red-500 text-white rounded text-xs hover:bg-red-600 transition">取消 Cancel</button>
-                          )}
-                        </div>
-                      ) : (!isPast && <p className="text-xs text-gray-500">可預約<br/>Available</p>)}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        ) : (
-          <div className="bg-white rounded-lg shadow-sm p-12 text-center">
-            <Calendar className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-            <p className="text-gray-500">請選擇儀器和日期以查看可預約時段</p>
-            <p className="text-gray-400 text-sm mt-2">Please select instrument and date to view available time slots</p>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
+                      <textarea value={systemSettings[`rule${num}`]} onChange={(e) => setSystemSettings({ ...systemSettings, [`rule${num}`]: e.target.value })} rows={3} className="w-full px
