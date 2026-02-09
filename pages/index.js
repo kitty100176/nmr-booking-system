@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Calendar, Clock, User, LogOut, Settings, X, Check, AlertCircle, UserCheck, UserX, UserPlus, Trash2, Edit, DollarSign, FileWarning, Save, ChevronDown, ChevronRight } from 'lucide-react';
+import { Calendar, Clock, User, LogOut, Settings, X, Check, AlertCircle, UserCheck, UserX, UserPlus, Trash2, Edit, DollarSign, FileWarning, Save, ChevronDown, ChevronRight, Zap } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 // 輔助函式：取得今天的日期字串 (YYYY-MM-DD)
@@ -722,42 +722,115 @@ export default function NMRBookingSystem() {
     }
   };
 
-  // === 計費相關輔助元件 ===
+  // === 計費相關輔助元件 (核心修改：支援連續時段優惠) ===
   const BillingModal = () => {
-    // 1. 計算時數
-    const calculateDurationInHours = (timeSlot) => {
+    
+    // 1. 將單個預約轉換為標準的開始與結束時間物件 (單位：分鐘，相對於當日 00:00)
+    const parseBookingTime = (dateStr, timeSlot) => {
       const [start, end] = timeSlot.split('-');
       const [startH, startM] = start.split(':').map(Number);
       const [endH, endM] = end.split(':').map(Number);
       
-      let startTotal = startH * 60 + startM;
-      let endTotal = endH * 60 + endM;
+      // 建立可比較的 Date 物件
+      const startTime = new Date(`${dateStr}T${String(startH).padStart(2,'0')}:${String(startM).padStart(2,'0')}:00`);
       
-      if (endTotal < startTotal) endTotal += 24 * 60;
+      let endTime = new Date(`${dateStr}T${String(endH).padStart(2,'0')}:${String(endM).padStart(2,'0')}:00`);
       
-      return (endTotal - startTotal) / 60;
+      // 處理跨日 (例如 23:00-00:00，結束時間要加一天)
+      if (endH < startH || (endH === startH && endM < startM)) {
+         endTime.setDate(endTime.getDate() + 1);
+      }
+
+      return {
+        start: startTime.getTime(),
+        end: endTime.getTime(),
+        durationHours: (endTime - startTime) / (1000 * 60 * 60)
+      };
     };
 
-    // 2. 整理每個 Lab 和用戶的數據
+    // 2. 整理每個 Lab 和用戶的數據，並計算連續優惠
     const billingData = useMemo(() => {
       const data = {};
       labs.forEach(lab => {
-        data[lab.name] = { totalHours: 0, users: {} };
+        data[lab.name] = { totalHours: 0, totalBillableHours: 0, users: {} };
       });
 
+      // 第一步：將預約按用戶分組
+      const bookingsByUser = {};
       historyBookings.forEach(booking => {
-        const duration = calculateDurationInHours(booking.time_slot);
-        const labName = booking.pi;
         const userName = booking.display_name;
+        if (!bookingsByUser[userName]) {
+            bookingsByUser[userName] = {
+                lab: booking.pi,
+                bookings: []
+            };
+        }
+        bookingsByUser[userName].bookings.push(booking);
+      });
 
-        if (!data[labName]) {
-            data[labName] = { totalHours: 0, users: {} };
-        }
-        data[labName].totalHours += duration;
-        if (!data[labName].users[userName]) {
-          data[labName].users[userName] = 0;
-        }
-        data[labName].users[userName] += duration;
+      // 第二步：處理每個用戶的預約，計算連續時段
+      Object.entries(bookingsByUser).forEach(([userName, userInfo]) => {
+          const labName = userInfo.lab;
+          
+          // 確保 Lab 存在
+          if (!data[labName]) {
+             data[labName] = { totalHours: 0, totalBillableHours: 0, users: {} };
+          }
+          if (!data[labName].users[userName]) {
+              data[labName].users[userName] = { 
+                  totalHours: 0, 
+                  billableHours: 0, 
+                  discountCount: 0 // 記錄優惠次數
+              };
+          }
+
+          // 排序該用戶的所有預約 (依時間先後)
+          const userBookings = userInfo.bookings.sort((a, b) => {
+              const timeA = parseBookingTime(a.date, a.time_slot).start;
+              const timeB = parseBookingTime(b.date, b.time_slot).start;
+              return timeA - timeB;
+          });
+
+          // 核心邏輯：遍歷排序後的預約，尋找連續區塊
+          let currentBlockDuration = 0;
+          let lastEndTime = null;
+
+          userBookings.forEach((booking, index) => {
+              const { start, end, durationHours } = parseBookingTime(booking.date, booking.time_slot);
+              
+              // 檢查是否連續：如果開始時間等於上一個結束時間
+              if (lastEndTime !== null && start === lastEndTime) {
+                  currentBlockDuration += durationHours;
+              } else {
+                  // 不連續，結算上一個區塊
+                  if (currentBlockDuration > 0) {
+                      // 計算優惠：每滿 12 小時，減免 2 小時 (算 10 小時)
+                      const discountBlocks = Math.floor(currentBlockDuration / 12);
+                      const billable = currentBlockDuration - (discountBlocks * 2);
+                      
+                      data[labName].users[userName].billableHours += billable;
+                      data[labName].users[userName].discountCount += discountBlocks;
+                  }
+                  // 開始新區塊
+                  currentBlockDuration = durationHours;
+              }
+              
+              lastEndTime = end;
+              data[labName].users[userName].totalHours += durationHours; // 總時數照常累加
+
+              // 如果是最後一筆，記得結算
+              if (index === userBookings.length - 1) {
+                  const discountBlocks = Math.floor(currentBlockDuration / 12);
+                  const billable = currentBlockDuration - (discountBlocks * 2);
+                  
+                  data[labName].users[userName].billableHours += billable;
+                  data[labName].users[userName].discountCount += discountBlocks;
+              }
+          });
+
+          // 累加到 Lab 總計
+          data[labName].totalHours += data[labName].users[userName].totalHours;
+          data[labName].totalBillableHours += data[labName].users[userName].billableHours;
       });
 
       return data;
@@ -786,7 +859,7 @@ export default function NMRBookingSystem() {
               計費設定
             </h2>
 
-            {/* === 新增：月份選擇器 === */}
+            {/* === 月份選擇器 === */}
             <div className="bg-white p-4 rounded-lg shadow-sm mb-4">
                <label className="block text-sm font-medium text-gray-700 mb-2">選擇計費月份</label>
                <input
@@ -796,7 +869,6 @@ export default function NMRBookingSystem() {
                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
                />
             </div>
-            {/* ======================= */}
             
             <div className="bg-white p-4 rounded-lg shadow-sm mb-6">
               <label className="block text-sm font-medium text-gray-700 mb-2">每小時費率 (NTD)</label>
@@ -817,6 +889,9 @@ export default function NMRBookingSystem() {
                <h3 className="font-semibold text-blue-800 mb-2">統計資訊</h3>
                <p className="text-sm text-blue-700">統計月份: <span className="font-bold">{selectedMonth}</span></p>
                <p className="text-sm text-blue-700">總預約數: {historyBookings.length} 筆</p>
+               <div className="mt-2 pt-2 border-t border-blue-200">
+                  <p className="text-xs text-blue-600">說明：連續使用 12 小時，僅收 10 小時費用。</p>
+               </div>
             </div>
 
             <div className="mt-auto">
@@ -855,7 +930,8 @@ export default function NMRBookingSystem() {
 
   const LabBillingRow = ({ labName, data, rate }) => {
     const [isOpen, setIsOpen] = useState(false);
-    const totalCost = data.totalHours * rate;
+    // 使用 billableHours (優惠後時數) 計算總金額
+    const totalCost = data.totalBillableHours * rate;
 
     return (
       <div className="border rounded-lg overflow-hidden">
@@ -869,7 +945,10 @@ export default function NMRBookingSystem() {
           </div>
           <div className="flex items-center gap-4">
              <div className="text-right">
-                <p className="text-sm text-gray-500">{data.totalHours.toFixed(1)} 小時</p>
+                <p className="text-sm text-gray-500">
+                    計費 {data.totalBillableHours.toFixed(1)} hr 
+                    <span className="text-xs text-gray-400 ml-1">(實際 {data.totalHours.toFixed(1)} hr)</span>
+                </p>
                 <p className="font-bold text-green-700 text-lg">${Math.round(totalCost).toLocaleString()}</p>
              </div>
           </div>
@@ -881,22 +960,34 @@ export default function NMRBookingSystem() {
               <thead className="bg-gray-50 text-gray-500">
                 <tr>
                   <th className="px-4 py-2 text-left">用戶</th>
-                  <th className="px-4 py-2 text-right">時數</th>
+                  <th className="px-4 py-2 text-right">實際/計費時數</th>
+                  <th className="px-4 py-2 text-left">優惠標記</th>
                   <th className="px-4 py-2 text-right">費用</th>
                 </tr>
               </thead>
               <tbody className="divide-y">
-                {Object.entries(data.users).map(([user, hours]) => (
+                {Object.entries(data.users).map(([user, info]) => (
                   <tr key={user}>
-                    <td className="px-4 py-2">{user}</td>
-                    <td className="px-4 py-2 text-right">{hours.toFixed(1)} hr</td>
+                    <td className="px-4 py-2 font-medium">{user}</td>
+                    <td className="px-4 py-2 text-right">
+                        <span className="text-gray-400 text-xs mr-2">{info.totalHours.toFixed(1)}</span>
+                        <span className="font-bold">{info.billableHours.toFixed(1)} hr</span>
+                    </td>
+                    <td className="px-4 py-2 text-left">
+                        {info.discountCount > 0 && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-orange-100 text-orange-700 text-xs font-medium">
+                                <Zap className="w-3 h-3" />
+                                優惠: {info.discountCount}次
+                            </span>
+                        )}
+                    </td>
                     <td className="px-4 py-2 text-right font-medium text-gray-700">
-                      ${Math.round(hours * rate).toLocaleString()}
+                      ${Math.round(info.billableHours * rate).toLocaleString()}
                     </td>
                   </tr>
                 ))}
                 {Object.keys(data.users).length === 0 && (
-                  <tr><td colSpan="3" className="px-4 py-2 text-center text-gray-400">本月無使用紀錄</td></tr>
+                  <tr><td colSpan="4" className="px-4 py-2 text-center text-gray-400">本月無使用紀錄</td></tr>
                 )}
               </tbody>
             </table>
