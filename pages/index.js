@@ -722,21 +722,18 @@ export default function NMRBookingSystem() {
     }
   };
 
-  // === 計費相關輔助元件 (核心修改：支援連續時段優惠) ===
+  // === 計費相關輔助元件 (包含連續優惠邏輯) ===
   const BillingModal = () => {
     
-    // 1. 將單個預約轉換為標準的開始與結束時間物件 (單位：分鐘，相對於當日 00:00)
+    // 1. 將單個預約轉換為標準的開始與結束時間物件 (單位：分鐘)
     const parseBookingTime = (dateStr, timeSlot) => {
       const [start, end] = timeSlot.split('-');
       const [startH, startM] = start.split(':').map(Number);
       const [endH, endM] = end.split(':').map(Number);
       
-      // 建立可比較的 Date 物件
       const startTime = new Date(`${dateStr}T${String(startH).padStart(2,'0')}:${String(startM).padStart(2,'0')}:00`);
-      
       let endTime = new Date(`${dateStr}T${String(endH).padStart(2,'0')}:${String(endM).padStart(2,'0')}:00`);
       
-      // 處理跨日 (例如 23:00-00:00，結束時間要加一天)
       if (endH < startH || (endH === startH && endM < startM)) {
          endTime.setDate(endTime.getDate() + 1);
       }
@@ -755,24 +752,18 @@ export default function NMRBookingSystem() {
         data[lab.name] = { totalHours: 0, totalBillableHours: 0, users: {} };
       });
 
-      // 第一步：將預約按用戶分組
       const bookingsByUser = {};
       historyBookings.forEach(booking => {
         const userName = booking.display_name;
         if (!bookingsByUser[userName]) {
-            bookingsByUser[userName] = {
-                lab: booking.pi,
-                bookings: []
-            };
+            bookingsByUser[userName] = { lab: booking.pi, bookings: [] };
         }
         bookingsByUser[userName].bookings.push(booking);
       });
 
-      // 第二步：處理每個用戶的預約，計算連續時段
       Object.entries(bookingsByUser).forEach(([userName, userInfo]) => {
           const labName = userInfo.lab;
           
-          // 確保 Lab 存在
           if (!data[labName]) {
              data[labName] = { totalHours: 0, totalBillableHours: 0, users: {} };
           }
@@ -780,55 +771,45 @@ export default function NMRBookingSystem() {
               data[labName].users[userName] = { 
                   totalHours: 0, 
                   billableHours: 0, 
-                  discountCount: 0 // 記錄優惠次數
+                  discountCount: 0 
               };
           }
 
-          // 排序該用戶的所有預約 (依時間先後)
           const userBookings = userInfo.bookings.sort((a, b) => {
               const timeA = parseBookingTime(a.date, a.time_slot).start;
               const timeB = parseBookingTime(b.date, b.time_slot).start;
               return timeA - timeB;
           });
 
-          // 核心邏輯：遍歷排序後的預約，尋找連續區塊
           let currentBlockDuration = 0;
           let lastEndTime = null;
 
           userBookings.forEach((booking, index) => {
               const { start, end, durationHours } = parseBookingTime(booking.date, booking.time_slot);
               
-              // 檢查是否連續：如果開始時間等於上一個結束時間
               if (lastEndTime !== null && start === lastEndTime) {
                   currentBlockDuration += durationHours;
               } else {
-                  // 不連續，結算上一個區塊
                   if (currentBlockDuration > 0) {
-                      // 計算優惠：每滿 12 小時，減免 2 小時 (算 10 小時)
                       const discountBlocks = Math.floor(currentBlockDuration / 12);
                       const billable = currentBlockDuration - (discountBlocks * 2);
-                      
                       data[labName].users[userName].billableHours += billable;
                       data[labName].users[userName].discountCount += discountBlocks;
                   }
-                  // 開始新區塊
                   currentBlockDuration = durationHours;
               }
               
               lastEndTime = end;
-              data[labName].users[userName].totalHours += durationHours; // 總時數照常累加
+              data[labName].users[userName].totalHours += durationHours;
 
-              // 如果是最後一筆，記得結算
               if (index === userBookings.length - 1) {
                   const discountBlocks = Math.floor(currentBlockDuration / 12);
                   const billable = currentBlockDuration - (discountBlocks * 2);
-                  
                   data[labName].users[userName].billableHours += billable;
                   data[labName].users[userName].discountCount += discountBlocks;
               }
           });
 
-          // 累加到 Lab 總計
           data[labName].totalHours += data[labName].users[userName].totalHours;
           data[labName].totalBillableHours += data[labName].users[userName].billableHours;
       });
@@ -836,7 +817,6 @@ export default function NMRBookingSystem() {
       return data;
     }, [historyBookings, labs]);
 
-    // 3. 儲存費率
     const saveHourlyRate = async () => {
       try {
         const { error } = await supabase
@@ -851,7 +831,18 @@ export default function NMRBookingSystem() {
 
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-        <div className="bg-white rounded-xl shadow-2xl max-w-5xl w-full h-[80vh] flex overflow-hidden">
+        <div className="bg-white rounded-xl shadow-2xl max-w-5xl w-full h-[80vh] flex overflow-hidden relative">
+          
+          {/* === 新增：右上角大 X 關閉按鈕 === */}
+          <button 
+             onClick={() => setShowBillingModal(false)}
+             className="absolute top-4 right-4 p-2 bg-gray-100 rounded-full hover:bg-gray-200 transition z-10"
+             title="關閉視窗"
+          >
+             <X className="w-5 h-5 text-gray-500" />
+          </button>
+          {/* ================================= */}
+
           {/* 左側控制區 */}
           <div className="w-1/3 bg-gray-50 p-6 border-r flex flex-col">
             <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2 mb-6">
@@ -859,7 +850,6 @@ export default function NMRBookingSystem() {
               計費設定
             </h2>
 
-            {/* === 月份選擇器 === */}
             <div className="bg-white p-4 rounded-lg shadow-sm mb-4">
                <label className="block text-sm font-medium text-gray-700 mb-2">選擇計費月份</label>
                <input
@@ -905,7 +895,7 @@ export default function NMRBookingSystem() {
           </div>
 
           {/* 右側列表區 */}
-          <div className="w-2/3 p-6 overflow-y-auto">
+          <div className="w-2/3 p-6 overflow-y-auto pt-12"> {/* 增加 pt 避免標題被 X 遮住 */}
             <h3 className="text-xl font-bold text-gray-800 mb-4">費用報表</h3>
             <div className="space-y-4">
               {Object.entries(billingData).map(([labName, data]) => (
@@ -930,7 +920,6 @@ export default function NMRBookingSystem() {
 
   const LabBillingRow = ({ labName, data, rate }) => {
     const [isOpen, setIsOpen] = useState(false);
-    // 使用 billableHours (優惠後時數) 計算總金額
     const totalCost = data.totalBillableHours * rate;
 
     return (
