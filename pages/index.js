@@ -722,10 +722,10 @@ export default function NMRBookingSystem() {
     }
   };
 
-  // === 計費相關輔助元件 (包含連續優惠邏輯 + 修正為小數點 2 位) ===
+  // === 計費相關輔助元件 (包含連續優惠邏輯 + 修正為小數點 2 位 + 僅六日優惠) ===
   const BillingModal = () => {
     
-    // 1. 將單個預約轉換為標準的開始與結束時間物件 (單位：分鐘)
+    // 1. 將單個預約轉換為標準的開始與結束時間物件 (單位：毫秒)
     const parseBookingTime = (dateStr, timeSlot) => {
       const [start, end] = timeSlot.split('-');
       const [startH, startM] = start.split(':').map(Number);
@@ -745,7 +745,7 @@ export default function NMRBookingSystem() {
       };
     };
 
-    // 2. 整理每個 Lab 和用戶的數據，並計算連續優惠
+    // 2. 整理每個 Lab 和用戶的數據，並計算連續優惠 (僅限週末)
     const billingData = useMemo(() => {
       const data = {};
       labs.forEach(lab => {
@@ -775,41 +775,65 @@ export default function NMRBookingSystem() {
               };
           }
 
+          // 排序預約
           const userBookings = userInfo.bookings.sort((a, b) => {
               const timeA = parseBookingTime(a.date, a.time_slot).start;
               const timeB = parseBookingTime(b.date, b.time_slot).start;
               return timeA - timeB;
           });
 
-          let currentBlockDuration = 0;
+          let currentWeekendBlockDuration = 0;
           let lastEndTime = null;
+          let currentIsWeekend = false;
 
           userBookings.forEach((booking, index) => {
               const { start, end, durationHours } = parseBookingTime(booking.date, booking.time_slot);
               
-              if (lastEndTime !== null && start === lastEndTime) {
-                  currentBlockDuration += durationHours;
-              } else {
-                  if (currentBlockDuration > 0) {
-                      const discountBlocks = Math.floor(currentBlockDuration / 12);
-                      const billable = currentBlockDuration - (discountBlocks * 2);
-                      data[labName].users[userName].billableHours += billable;
-                      data[labName].users[userName].discountCount += discountBlocks;
+              // 判斷是否為六日 (0=週日, 6=週六)
+              const dateObj = new Date(booking.date + 'T00:00:00');
+              const dayOfWeek = dateObj.getDay();
+              const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+
+              // 先將所有時數無條件加入總計與計費時數
+              data[labName].users[userName].totalHours += durationHours;
+              data[labName].users[userName].billableHours += durationHours;
+
+              if (isWeekend) {
+                  // 如果是週末，檢查是否與上一個週末預約連續
+                  if (lastEndTime !== null && start === lastEndTime && currentIsWeekend) {
+                      currentWeekendBlockDuration += durationHours;
+                  } else {
+                      // 發生斷層，先結算上一個連續週末區塊的優惠
+                      if (currentWeekendBlockDuration > 0) {
+                          const discountBlocks = Math.floor(currentWeekendBlockDuration / 12);
+                          data[labName].users[userName].billableHours -= (discountBlocks * 2);
+                          data[labName].users[userName].discountCount += discountBlocks;
+                      }
+                      // 重新開始累計新的週末區塊
+                      currentWeekendBlockDuration = durationHours;
                   }
-                  currentBlockDuration = durationHours;
+              } else {
+                  // 遇到平日預約，中斷週末連續計算，並結算上一段週末的優惠
+                  if (currentWeekendBlockDuration > 0) {
+                      const discountBlocks = Math.floor(currentWeekendBlockDuration / 12);
+                      data[labName].users[userName].billableHours -= (discountBlocks * 2);
+                      data[labName].users[userName].discountCount += discountBlocks;
+                      currentWeekendBlockDuration = 0;
+                  }
               }
               
               lastEndTime = end;
-              data[labName].users[userName].totalHours += durationHours;
+              currentIsWeekend = isWeekend;
 
-              if (index === userBookings.length - 1) {
-                  const discountBlocks = Math.floor(currentBlockDuration / 12);
-                  const billable = currentBlockDuration - (discountBlocks * 2);
-                  data[labName].users[userName].billableHours += billable;
+              // 如果是最後一筆預約，結算最後剩下的週末連續區塊
+              if (index === userBookings.length - 1 && currentWeekendBlockDuration > 0) {
+                  const discountBlocks = Math.floor(currentWeekendBlockDuration / 12);
+                  data[labName].users[userName].billableHours -= (discountBlocks * 2);
                   data[labName].users[userName].discountCount += discountBlocks;
               }
           });
 
+          // 將用戶的最終時數累加到 Lab 總計
           data[labName].totalHours += data[labName].users[userName].totalHours;
           data[labName].totalBillableHours += data[labName].users[userName].billableHours;
       });
@@ -833,7 +857,6 @@ export default function NMRBookingSystem() {
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
         <div className="bg-white rounded-xl shadow-2xl max-w-5xl w-full h-[80vh] flex overflow-hidden relative">
           
-          {/* === 右上角大 X 關閉按鈕 === */}
           <button 
              onClick={() => setShowBillingModal(false)}
              className="absolute top-4 right-4 p-2 bg-gray-100 rounded-full hover:bg-gray-200 transition z-10"
@@ -879,7 +902,8 @@ export default function NMRBookingSystem() {
                <p className="text-sm text-blue-700">統計月份: <span className="font-bold">{selectedMonth}</span></p>
                <p className="text-sm text-blue-700">總預約數: {historyBookings.length} 筆</p>
                <div className="mt-2 pt-2 border-t border-blue-200">
-                  <p className="text-xs text-blue-600">說明：連續使用 12 小時，僅收 10 小時費用。</p>
+                  <p className="text-xs text-blue-600 font-bold">優惠說明：</p>
+                  <p className="text-xs text-blue-600">週末 (六、日) 連續使用滿 12 小時，僅收 10 小時費用。</p>
                </div>
             </div>
 
@@ -965,7 +989,7 @@ export default function NMRBookingSystem() {
                         {info.discountCount > 0 && (
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-orange-100 text-orange-700 text-xs font-medium">
                                 <Zap className="w-3 h-3" />
-                                優惠: {info.discountCount}次
+                                週末優惠: {info.discountCount}次
                             </span>
                         )}
                     </td>
