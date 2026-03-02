@@ -1,0 +1,21 @@
+name: Keep Supabase Alive
+
+# 設定觸發時間
+on:
+  schedule:
+    # 每天的 UTC 時間凌晨 0 點 (台灣時間早上 8 點) 自動執行一次
+    - cron: '0 0 * * *'
+  # 允許你在 GitHub 網頁上手動點擊執行
+  workflow_dispatch:
+
+jobs:
+  ping-database:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Supabase system_settings table
+        # 這裡的 URL 請換成你自己的 Supabase URL！
+        # 記得保留後面的 /rest/v1/system_settings?select=*
+        run: |
+          curl -X GET 'https://ufmvohvflxicjiwpoftl.supabase.co/rest/v1/system_settings?select=*' \
+          -H "apikey: ${{ secrets.SUPABASE_ANON_KEY }}" \
+          -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}"
