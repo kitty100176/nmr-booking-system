@@ -82,7 +82,7 @@ const loadServiceItems = async () => {
     loadExternalRequests(); // 系統載入時預先讀取，為了算紅點數量
   }, []);
 
-  const handleExternalSubmit = async () => {
+const handleExternalSubmit = async () => {
     if (!externalForm.name || !externalForm.email || !externalForm.service_item || !externalForm.code) {
       alert('請填寫必填欄位 (姓名、Email、編碼、服務項目)');
       return;
@@ -92,7 +92,10 @@ const loadServiceItems = async () => {
       if (error) throw error;
       alert('表單送出成功！我們會盡快與您聯絡。');
       setExternalForm({ name: '', email: '', solvent: '', code: '', service_item: '', note: '' });
-      // 這裡未來可以觸發 LINE Notify Webhook
+      
+      // === 加入這行：送出後立刻重新抓取最新資料 ===
+      await loadExternalRequests(); 
+      
     } catch (error) {
       console.error(error);
       alert('送出失敗，請稍後再試');
@@ -249,12 +252,7 @@ const loadServiceItems = async () => {
 
   const loadSystemSettings = async () => {
     try {
-      const { data, error } = await supabase
-        .from('system_settings')
-        .select('*')
-        .eq('id', 1)
-        .single();
-      
+      const { data, error } = await supabase.from('system_settings').select('*').eq('id', 1).single();
       if (data) {
         setSystemSettings(data);
         if (data.hourly_rate) setHourlyRate(data.hourly_rate);
@@ -267,6 +265,13 @@ const loadServiceItems = async () => {
           rule5: '使用前請確認已通過該儀器操作訓練',
           rule6: '如有問題請聯絡管理員',
           rule7: '',
+          ext_rule1: '歡迎使用送測服務，請詳細填寫左側表單',
+          ext_rule2: '樣品請妥善包裝並標示編號',
+          ext_rule3: '若有特殊需求請在備註欄說明',
+          ext_rule4: '',
+          ext_rule5: '',
+          ext_rule6: '',
+          ext_rule7: '',
           hourly_rate: 100
         };
         setSystemSettings(defaultSettings);
@@ -583,16 +588,12 @@ const loadServiceItems = async () => {
     try {
       const { data: existing } = await supabase.from('system_settings').select('id').eq('id', 1).single();
       const updateData = {
-        rule1: systemSettings.rule1,
-        rule2: systemSettings.rule2,
-        rule3: systemSettings.rule3,
-        rule4: systemSettings.rule4,
-        rule5: systemSettings.rule5,
-        rule6: systemSettings.rule6,
-        rule7: systemSettings.rule7,
+        rule1: systemSettings.rule1, rule2: systemSettings.rule2, rule3: systemSettings.rule3, 
+        rule4: systemSettings.rule4, rule5: systemSettings.rule5, rule6: systemSettings.rule6, rule7: systemSettings.rule7,
+        ext_rule1: systemSettings.ext_rule1, ext_rule2: systemSettings.ext_rule2, ext_rule3: systemSettings.ext_rule3,
+        ext_rule4: systemSettings.ext_rule4, ext_rule5: systemSettings.ext_rule5, ext_rule6: systemSettings.ext_rule6, ext_rule7: systemSettings.ext_rule7,
         hourly_rate: hourlyRate
       };
-
       if (existing) {
         const { error } = await supabase.from('system_settings').update(updateData).eq('id', 1);
         if (error) throw error;
@@ -1148,18 +1149,32 @@ if (!isLoggedIn) {
             </div>
 
             {/* ====== 右半邊：使用規則 (維持原樣) ====== */}
-            <div className="md:w-1/2 bg-indigo-600 text-white p-8 flex flex-col max-h-screen">
-              <h2 className="text-2xl font-bold mb-6 flex-shrink-0">使用規則 Rules</h2>
+            {/* ====== 右半邊：動態切換規則與背景色 ====== */}
+            <div className={`md:w-1/2 text-white p-8 flex flex-col max-h-screen transition-colors duration-500 ${loginTab === 'internal' ? 'bg-indigo-600' : 'bg-teal-600'}`}>
+              <h2 className="text-2xl font-bold mb-6 flex-shrink-0">
+                {loginTab === 'internal' ? '使用規則 Rules' : '送測須知 Instructions'}
+              </h2>
               <div className="space-y-4 overflow-y-auto flex-1 pr-2">
                 {systemSettings ? (
                   [1, 2, 3, 4, 5, 6, 7].map(num => {
-                    const ruleText = systemSettings[`rule${num}`];
+                    // 根據當前 Tab 選擇要顯示哪一組文字
+                    const ruleText = loginTab === 'internal' 
+                      ? systemSettings[`rule${num}`] 
+                      : systemSettings[`ext_rule${num}`];
+                      
                     if (!ruleText || ruleText.trim() === '') return null;
                     return (
                       <div key={num} className="flex items-start gap-3">
                         <Check className="w-5 h-5 mt-1 flex-shrink-0" />
                         <p className="whitespace-pre-wrap">{ruleText}</p>
                       </div>
+                    );
+                  })
+                ) : (
+                  <p>載入中...</p>
+                )}
+              </div>
+            </div>
                     );
                   })
                 ) : (
@@ -1481,39 +1496,68 @@ if (!isLoggedIn) {
             <button onClick={() => setShowSettingsPanel(false)} className="flex items-center gap-2 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition"><X className="w-4 h-4" />返回</button>
           </div>
         </div>
-        <div className="max-w-7xl mx-auto p-4">
+<div className="max-w-7xl mx-auto p-4">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            
+            {/* 左側編輯區 (加入捲軸與雙區塊) */}
             <div className="bg-white rounded-lg shadow-sm p-6">
-              <h2 className="text-xl font-bold mb-2">編輯使用規則</h2>
-              <p className="text-sm text-gray-600 mb-6">修改登入頁面右側顯示的使用規則文字</p>
+              <h2 className="text-xl font-bold mb-2">編輯介面文字</h2>
+              <p className="text-sm text-gray-600 mb-4">修改登入頁面與送測服務顯示的文字</p>
               {systemSettings && (
-                <div className="space-y-4">
-                  {[1, 2, 3, 4, 5, 6, 7].map(num => (
-                    <div key={num}>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">規則 {num}</label>
-                      <textarea value={systemSettings[`rule${num}`]} onChange={(e) => setSystemSettings({ ...systemSettings, [`rule${num}`]: e.target.value })} rows={3} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 resize-y" placeholder={`輸入規則 ${num} 的內容...`}/>
-                    </div>
-                  ))}
-                  <button onClick={handleSaveSettings} className="w-full mt-6 px-4 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition font-medium">儲存設定</button>
+                <div className="space-y-6 max-h-[60vh] overflow-y-auto pr-4">
+                  {/* 校內登入規則 */}
+                  <div className="bg-gray-50 p-4 rounded-lg border">
+                    <h3 className="text-lg font-bold border-b pb-2 mb-4 text-indigo-700">校內使用規則</h3>
+                    {[1, 2, 3, 4, 5, 6, 7].map(num => (
+                      <div key={`rule-${num}`} className="mb-3">
+                        <label className="block text-xs font-medium text-gray-700 mb-1">規則 {num}</label>
+                        <textarea value={systemSettings[`rule${num}`] || ''} onChange={(e) => setSystemSettings({ ...systemSettings, [`rule${num}`]: e.target.value })} rows={2} className="w-full px-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm"/>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* 送測服務須知 */}
+                  <div className="bg-gray-50 p-4 rounded-lg border">
+                    <h3 className="text-lg font-bold border-b pb-2 mb-4 text-teal-700">校外送測須知</h3>
+                    {[1, 2, 3, 4, 5, 6, 7].map(num => (
+                      <div key={`ext-${num}`} className="mb-3">
+                        <label className="block text-xs font-medium text-gray-700 mb-1">須知 {num}</label>
+                        <textarea value={systemSettings[`ext_rule${num}`] || ''} onChange={(e) => setSystemSettings({ ...systemSettings, [`ext_rule${num}`]: e.target.value })} rows={2} className="w-full px-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 text-sm"/>
+                      </div>
+                    ))}
+                  </div>
+                  <button onClick={handleSaveSettings} className="w-full mt-4 px-4 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition font-medium">儲存設定</button>
                 </div>
               )}
             </div>
-            <div className="lg:sticky lg:top-20 lg:self-start">
-              <div className="bg-white rounded-lg shadow-sm p-6">
-                <h2 className="text-xl font-bold mb-2">即時預覽</h2>
-                <div className="bg-indigo-600 text-white p-6 rounded-lg max-h-[600px] overflow-y-auto">
-                  <h3 className="text-xl font-bold mb-4 sticky top-0 bg-indigo-600 pb-2">使用規則</h3>
-                  <div className="space-y-3">
-                    {systemSettings && [1, 2, 3, 4, 5, 6, 7].map(num => (
-                      systemSettings[`rule${num}`] && (
-                        <div key={num} className="flex items-start gap-3"><Check className="w-5 h-5 mt-0.5 flex-shrink-0" /><p className="text-sm whitespace-pre-wrap">{systemSettings[`rule${num}`]}</p></div>
-                      )
-                    ))}
-                  </div>
+
+            {/* 右側即時預覽區 */}
+            <div className="lg:sticky lg:top-20 lg:self-start space-y-4">
+              <div className="bg-indigo-600 text-white p-6 rounded-lg shadow-sm">
+                <h3 className="text-lg font-bold mb-4 border-b border-indigo-400 pb-2">預覽：校內使用規則</h3>
+                <div className="space-y-3 text-sm">
+                  {systemSettings && [1, 2, 3, 4, 5, 6, 7].map(num => (
+                    systemSettings[`rule${num}`] && (
+                      <div key={`prev-rule-${num}`} className="flex items-start gap-2"><Check className="w-4 h-4 mt-0.5 flex-shrink-0" /><p className="whitespace-pre-wrap">{systemSettings[`rule${num}`]}</p></div>
+                    )
+                  ))}
+                </div>
+              </div>
+              
+              <div className="bg-teal-600 text-white p-6 rounded-lg shadow-sm">
+                <h3 className="text-lg font-bold mb-4 border-b border-teal-400 pb-2">預覽：校外送測須知</h3>
+                <div className="space-y-3 text-sm">
+                  {systemSettings && [1, 2, 3, 4, 5, 6, 7].map(num => (
+                    systemSettings[`ext_rule${num}`] && (
+                      <div key={`prev-ext-${num}`} className="flex items-start gap-2"><Check className="w-4 h-4 mt-0.5 flex-shrink-0" /><p className="whitespace-pre-wrap">{systemSettings[`ext_rule${num}`]}</p></div>
+                    )
+                  ))}
                 </div>
               </div>
             </div>
           </div>
+        </div>          
+        </div>
         </div>
       </div>
     );
