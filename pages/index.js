@@ -1148,7 +1148,6 @@ if (!isLoggedIn) {
               </div>
             </div>
 
-            {/* ====== 右半邊：使用規則 (維持原樣) ====== */}
             {/* ====== 右半邊：動態切換規則與背景色 ====== */}
             <div className={`md:w-1/2 text-white p-8 flex flex-col max-h-screen transition-colors duration-500 ${loginTab === 'internal' ? 'bg-indigo-600' : 'bg-teal-600'}`}>
               <h2 className="text-2xl font-bold mb-6 flex-shrink-0">
@@ -1157,7 +1156,6 @@ if (!isLoggedIn) {
               <div className="space-y-4 overflow-y-auto flex-1 pr-2">
                 {systemSettings ? (
                   [1, 2, 3, 4, 5, 6, 7].map(num => {
-                    // 根據當前 Tab 選擇要顯示哪一組文字
                     const ruleText = loginTab === 'internal' 
                       ? systemSettings[`rule${num}`] 
                       : systemSettings[`ext_rule${num}`];
@@ -1175,20 +1173,12 @@ if (!isLoggedIn) {
                 )}
               </div>
             </div>
-                    );
-                  })
-                ) : (
-                  <p>載入中...</p>
-                )}
-              </div>
-            </div>
             
           </div>
         </div>
       </div>
     );
   }
-
 
   if (showNotification) {
     return (
