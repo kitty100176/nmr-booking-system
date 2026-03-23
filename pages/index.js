@@ -113,6 +113,23 @@ const handleExternalSubmit = async () => {
     }
   };
 
+  const handleDeleteRequest = async (id, name, e) => {
+    e.stopPropagation(); // 阻止事件冒泡，避免點擊刪除按鈕時不小心打開詳細資料 Modal
+    if (!window.confirm(`確定要刪除「${name}」的委託單嗎？此操作無法復原！`)) {
+      return;
+    }
+    try {
+      const { error } = await supabase.from('external_requests').delete().eq('id', id);
+      if (error) throw error;
+      alert('委託單已刪除！');
+      await loadExternalRequests(); // 重新整理列表
+      if (selectedRequest?.id === id) setSelectedRequest(null);
+    } catch (error) {
+      console.error('刪除失敗:', error);
+      alert('刪除失敗，請稍後再試');
+    }
+  };
+
   // 生成時段
   const generateTimeSlots = useCallback(() => {
     if (!timeSlotSettings) return [];
@@ -1052,7 +1069,7 @@ if (!isLoggedIn) {
             <div className="md:w-1/2 p-6 md:p-8 flex flex-col h-full relative">
               <div className="flex items-center gap-3 mb-6">
                 <Calendar className="w-8 h-8 text-indigo-600" />
-                <h1 className="text-3xl font-bold text-gray-800">NMR預約系統</h1>
+                <h1 className="text-3xl font-bold text-gray-800">NDHU_NMR</h1>
               </div>
 
               {/* 真實標籤頁 (Folder Tabs) 設計 */}
@@ -1696,11 +1713,19 @@ if (!isLoggedIn) {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {externalRequests.map(req => (
               <div key={req.id} onClick={() => setSelectedRequest(req)} className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm hover:shadow-md cursor-pointer transition flex flex-col h-full">
-                <div className="flex justify-between items-start mb-3">
+              <div className="flex justify-between items-start mb-3">
                   <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${req.status === '未處理' ? 'bg-red-100 text-red-700' : req.status === '已聯絡' ? 'bg-yellow-100 text-yellow-700' : req.status === '已完成' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}`}>{req.status}</span>
-                  <span className="text-xs text-gray-400">{new Date(req.created_at).toLocaleDateString()}</span>
-                </div>
-                <h3 className="text-lg font-bold text-gray-800 mb-1">{req.name}</h3>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-gray-400">{new Date(req.created_at).toLocaleDateString()}</span>
+                    <button 
+                      onClick={(e) => handleDeleteRequest(req.id, req.name, e)}
+                      className="text-red-400 hover:text-red-600 p-1 rounded hover:bg-red-50 transition-colors"
+                      title="刪除此委託單"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>                <h3 className="text-lg font-bold text-gray-800 mb-1">{req.name}</h3>
                 <p className="text-sm text-gray-500 mb-4 flex-1">編碼: <span className="font-semibold text-gray-700">{req.code}</span><br/>服務: {req.service_item}</p>
                 <div className="border-t pt-3 mt-auto flex justify-between text-sm">
                   <span className="text-gray-500">耗時: {req.time_spent} hr</span>
