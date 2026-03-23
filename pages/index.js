@@ -1,7 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Calendar, Clock, User, LogOut, Settings, X, Check, AlertCircle, UserCheck, UserX, UserPlus, Trash2, Edit, DollarSign, FileWarning, Save, ChevronDown, ChevronRight, Zap } from 'lucide-react';
-import { supabase } from '../lib/supabase';
-
+import { Calendar, Clock, User, LogOut, Settings, X, Check, AlertCircle, UserCheck, UserX, UserPlus, Trash2, Edit, DollarSign, FileWarning, Save, ChevronDown, ChevronRight, Zap, ClipboardList, ArrowLeft, Plus } from 'lucide-react';
 // 輔助函式：取得今天的日期字串 (YYYY-MM-DD)
 const getTodayString = () => {
   const today = new Date();
@@ -54,6 +52,18 @@ export default function NMRBookingSystem() {
   const [violationText, setViolationText] = useState('');
   const [hourlyRate, setHourlyRate] = useState(100);
   // ======================
+
+// === 新增：校外委託專用 State ===
+  const [loginTab, setLoginTab] = useState('internal'); 
+  const [serviceOptions, setServiceOptions] = useState([]);
+  const [externalForm, setExternalForm] = useState({ name: '', email: '', d_solvent: '', code: '', service_item: '', client_remark: '' });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showExternalPanel, setShowExternalPanel] = useState(false);
+  const [commissions, setCommissions] = useState([]);
+  const [currentCommission, setCurrentCommission] = useState(null);
+  const [showCommissionModal, setShowCommissionModal] = useState(false);
+  const [showEditServiceModal, setShowEditServiceModal] = useState(false);
+  const [newServiceOption, setNewServiceOption] = useState('');
 
   const INSTRUMENTS = ['60', '500'];
 
@@ -161,10 +171,11 @@ export default function NMRBookingSystem() {
     }
   }, []);
 
-  useEffect(() => {
+useEffect(() => {
     loadSystemSettings();
     loadLabs();
     loadTimeSlotSettings();
+    loadServiceOptions(); // 新增：載入服務項目
   }, []);
 
   useEffect(() => {
@@ -172,10 +183,10 @@ export default function NMRBookingSystem() {
       loadBookings();
       if (currentUser?.is_admin) {
         loadUsers();
+        loadCommissions(); // 新增：載入委託單
       }
     }
   }, [isLoggedIn, selectedInstrument, selectedDate, loadBookings, currentUser, loadUsers]);
-
   useEffect(() => {
     if (isLoggedIn && !selectedDate) {
       setSelectedDate(getTodayString());
@@ -290,6 +301,59 @@ export default function NMRBookingSystem() {
       alert('登入失敗，請稍後再試\nLogin failed, please try again later');
     }
   };
+
+// ======= 新增：校外送測相關函式 =======
+  const loadServiceOptions = async () => {
+    try {
+      const { data, error } = await supabase.from('service_options').select('*').order('id');
+      if (!error && data) setServiceOptions(data);
+    } catch (e) { console.error('載入服務項目失敗', e); }
+  };
+
+  const loadCommissions = async () => {
+    try {
+      const { data, error } = await supabase.from('external_commissions').select('*').order('created_at', { ascending: false });
+      if (!error && data) setCommissions(data);
+    } catch (e) { console.error('載入委託單失敗', e); }
+  };
+
+  const handleExternalSubmit = async (e) => {
+    e.preventDefault();
+    if (!externalForm.name || !externalForm.email || !externalForm.service_item) {
+      alert('請填寫必填欄位！'); return;
+    }
+    setIsSubmitting(true);
+    try {
+      const { error } = await supabase.from('external_commissions').insert([{
+        name: externalForm.name, email: externalForm.email, d_solvent: externalForm.d_solvent, code: externalForm.code, service_item: externalForm.service_item, client_remark: externalForm.client_remark
+      }]);
+      if (error) throw error;
+      alert('送測委託已成功送出！');
+      setExternalForm({ name: '', email: '', d_solvent: '', code: '', service_item: '', client_remark: '' });
+    } catch (error) { alert('送出失敗，請稍後再試。'); } finally { setIsSubmitting(false); }
+  };
+
+  const handleUpdateCommission = async () => {
+    if (!currentCommission) return;
+    try {
+      const cost = Number(currentCommission.used_hours) * Number(currentCommission.hourly_rate);
+      const { error } = await supabase.from('external_commissions').update({
+        status: currentCommission.status, operator_remark: currentCommission.operator_remark, used_hours: currentCommission.used_hours, hourly_rate: currentCommission.hourly_rate, total_cost: cost
+      }).eq('id', currentCommission.id);
+      if (error) throw error;
+      alert('委託單資料已更新！'); setShowCommissionModal(false); await loadCommissions();
+    } catch (e) { alert('更新失敗！'); }
+  };
+
+  const handleAddServiceOption = async () => {
+    if (!newServiceOption.trim()) return;
+    try { await supabase.from('service_options').insert([{ item_name: newServiceOption }]); setNewServiceOption(''); await loadServiceOptions(); } catch (e) { alert('新增失敗'); }
+  };
+
+  const handleDeleteServiceOption = async (id) => {
+    try { await supabase.from('service_options').delete().eq('id', id); await loadServiceOptions(); } catch (e) { alert('刪除失敗'); }
+  };
+  // ======================================
 
   const handleLogout = () => {
     setIsLoggedIn(false);
@@ -722,10 +786,10 @@ export default function NMRBookingSystem() {
     }
   };
 
-  // === 計費相關輔助元件 (包含連續優惠邏輯 + 修正為小數點 2 位 + 僅六日優惠) ===
+  // === 計費相關輔助元件 (包含連續優惠邏輯 + 修正為小數點 2 位) ===
   const BillingModal = () => {
     
-    // 1. 將單個預約轉換為標準的開始與結束時間物件 (單位：毫秒)
+    // 1. 將單個預約轉換為標準的開始與結束時間物件 (單位：分鐘)
     const parseBookingTime = (dateStr, timeSlot) => {
       const [start, end] = timeSlot.split('-');
       const [startH, startM] = start.split(':').map(Number);
@@ -745,7 +809,7 @@ export default function NMRBookingSystem() {
       };
     };
 
-    // 2. 整理每個 Lab 和用戶的數據，並計算連續優惠 (僅限週末)
+    // 2. 整理每個 Lab 和用戶的數據，並計算連續優惠
     const billingData = useMemo(() => {
       const data = {};
       labs.forEach(lab => {
@@ -775,65 +839,41 @@ export default function NMRBookingSystem() {
               };
           }
 
-          // 排序預約
           const userBookings = userInfo.bookings.sort((a, b) => {
               const timeA = parseBookingTime(a.date, a.time_slot).start;
               const timeB = parseBookingTime(b.date, b.time_slot).start;
               return timeA - timeB;
           });
 
-          let currentWeekendBlockDuration = 0;
+          let currentBlockDuration = 0;
           let lastEndTime = null;
-          let currentIsWeekend = false;
 
           userBookings.forEach((booking, index) => {
               const { start, end, durationHours } = parseBookingTime(booking.date, booking.time_slot);
               
-              // 判斷是否為六日 (0=週日, 6=週六)
-              const dateObj = new Date(booking.date + 'T00:00:00');
-              const dayOfWeek = dateObj.getDay();
-              const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-
-              // 先將所有時數無條件加入總計與計費時數
-              data[labName].users[userName].totalHours += durationHours;
-              data[labName].users[userName].billableHours += durationHours;
-
-              if (isWeekend) {
-                  // 如果是週末，檢查是否與上一個週末預約連續
-                  if (lastEndTime !== null && start === lastEndTime && currentIsWeekend) {
-                      currentWeekendBlockDuration += durationHours;
-                  } else {
-                      // 發生斷層，先結算上一個連續週末區塊的優惠
-                      if (currentWeekendBlockDuration > 0) {
-                          const discountBlocks = Math.floor(currentWeekendBlockDuration / 12);
-                          data[labName].users[userName].billableHours -= (discountBlocks * 2);
-                          data[labName].users[userName].discountCount += discountBlocks;
-                      }
-                      // 重新開始累計新的週末區塊
-                      currentWeekendBlockDuration = durationHours;
-                  }
+              if (lastEndTime !== null && start === lastEndTime) {
+                  currentBlockDuration += durationHours;
               } else {
-                  // 遇到平日預約，中斷週末連續計算，並結算上一段週末的優惠
-                  if (currentWeekendBlockDuration > 0) {
-                      const discountBlocks = Math.floor(currentWeekendBlockDuration / 12);
-                      data[labName].users[userName].billableHours -= (discountBlocks * 2);
+                  if (currentBlockDuration > 0) {
+                      const discountBlocks = Math.floor(currentBlockDuration / 12);
+                      const billable = currentBlockDuration - (discountBlocks * 2);
+                      data[labName].users[userName].billableHours += billable;
                       data[labName].users[userName].discountCount += discountBlocks;
-                      currentWeekendBlockDuration = 0;
                   }
+                  currentBlockDuration = durationHours;
               }
               
               lastEndTime = end;
-              currentIsWeekend = isWeekend;
+              data[labName].users[userName].totalHours += durationHours;
 
-              // 如果是最後一筆預約，結算最後剩下的週末連續區塊
-              if (index === userBookings.length - 1 && currentWeekendBlockDuration > 0) {
-                  const discountBlocks = Math.floor(currentWeekendBlockDuration / 12);
-                  data[labName].users[userName].billableHours -= (discountBlocks * 2);
+              if (index === userBookings.length - 1) {
+                  const discountBlocks = Math.floor(currentBlockDuration / 12);
+                  const billable = currentBlockDuration - (discountBlocks * 2);
+                  data[labName].users[userName].billableHours += billable;
                   data[labName].users[userName].discountCount += discountBlocks;
               }
           });
 
-          // 將用戶的最終時數累加到 Lab 總計
           data[labName].totalHours += data[labName].users[userName].totalHours;
           data[labName].totalBillableHours += data[labName].users[userName].billableHours;
       });
@@ -857,6 +897,7 @@ export default function NMRBookingSystem() {
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
         <div className="bg-white rounded-xl shadow-2xl max-w-5xl w-full h-[80vh] flex overflow-hidden relative">
           
+          {/* === 右上角大 X 關閉按鈕 === */}
           <button 
              onClick={() => setShowBillingModal(false)}
              className="absolute top-4 right-4 p-2 bg-gray-100 rounded-full hover:bg-gray-200 transition z-10"
@@ -902,8 +943,7 @@ export default function NMRBookingSystem() {
                <p className="text-sm text-blue-700">統計月份: <span className="font-bold">{selectedMonth}</span></p>
                <p className="text-sm text-blue-700">總預約數: {historyBookings.length} 筆</p>
                <div className="mt-2 pt-2 border-t border-blue-200">
-                  <p className="text-xs text-blue-600 font-bold">優惠說明：</p>
-                  <p className="text-xs text-blue-600">週末 (六、日) 連續使用滿 12 小時，僅收 10 小時費用。</p>
+                  <p className="text-xs text-blue-600">說明：連續使用 12 小時，僅收 10 小時費用。</p>
                </div>
             </div>
 
@@ -989,7 +1029,7 @@ export default function NMRBookingSystem() {
                         {info.discountCount > 0 && (
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-orange-100 text-orange-700 text-xs font-medium">
                                 <Zap className="w-3 h-3" />
-                                週末優惠: {info.discountCount}次
+                                優惠: {info.discountCount}次
                             </span>
                         )}
                     </td>
@@ -1647,6 +1687,14 @@ export default function NMRBookingSystem() {
                   <button onClick={() => setShowHistoryNotice(true)} className="flex items-center gap-2 px-3 py-2 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 transition text-sm"><Calendar className="w-4 h-4" />歷史記錄</button>
                   <button onClick={() => setShowTimeSlotPanel(true)} className="flex items-center gap-2 px-3 py-2 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition text-sm"><Clock className="w-4 h-4" />時段設定</button>
                   <button onClick={() => setShowSettingsPanel(true)} className="flex items-center gap-2 px-3 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition text-sm"><Settings className="w-4 h-4" />系統設定</button>
+<button onClick={() => { setShowExternalPanel(true); setShowAdminPanel(false); setShowHistoryPanel(false); setShowSettingsPanel(false); setShowTimeSlotPanel(false); }} className="relative flex items-center gap-2 px-3 py-2 bg-yellow-100 text-yellow-700 rounded-lg hover:bg-yellow-200 transition text-sm font-bold">
+                    <ClipboardList className="w-4 h-4" /> [校外委託管理]
+                    {commissions.filter(c => c.status === '未處理').length > 0 && (
+                      <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full">
+                        {commissions.filter(c => c.status === '未處理').length}
+                      </span>
+                    )}
+                  </button>
                 </>
               )}
               <button onClick={handleLogout} className="flex items-center gap-2 px-3 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition text-sm"><LogOut className="w-4 h-4" />登出 Logout</button>
@@ -1713,6 +1761,89 @@ export default function NMRBookingSystem() {
           </div>
         )}
       </div>
+{/* === 新增：校外委託管理面板 (取代原本的網格預約系統顯示) === */}
+      {showExternalPanel && currentUser?.is_admin && (
+        <div className="max-w-7xl mx-auto p-4 relative z-10 bg-white rounded-lg shadow-sm mt-6">
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-2xl font-bold text-gray-800">待處理委託單</h2>
+            <div className="flex gap-2">
+              <button onClick={() => setShowEditServiceModal(true)} className="px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 font-medium flex items-center gap-1"><Edit className="w-4 h-4" />[編輯服務項目]</button>
+              <button onClick={() => setShowExternalPanel(false)} className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 font-medium flex items-center gap-1"><ArrowLeft className="w-4 h-4" />[返回]</button>
+            </div>
+          </div>
+          
+          <div className="flex flex-wrap gap-4">
+            {commissions.map(comm => (
+              <div key={comm.id} onClick={() => { setCurrentCommission(comm); setShowCommissionModal(true); }} 
+                className={`bg-white border p-4 rounded-lg w-72 cursor-pointer hover:shadow-lg transition border-l-4 ${comm.status === '未處理' ? 'border-l-orange-500' : 'border-l-green-500'}`}>
+                <h4 className="font-bold text-lg text-gray-800">{comm.name} <span className="text-gray-500 text-sm">({comm.code || '無編碼'})</span></h4>
+                <p className="text-gray-600 text-sm mt-2">項目: {comm.service_item}</p>
+                <p className={`text-sm font-medium mt-1 ${comm.status === '未處理' ? 'text-orange-600' : 'text-green-600'}`}>狀態: {comm.status}</p>
+                <p className="text-gray-500 text-sm mt-2 pt-2 border-t">時間: {comm.used_hours} 小時 | 花費: ${comm.total_cost}</p>
+              </div>
+            ))}
+            {commissions.length === 0 && <p className="text-gray-500">目前沒有委託單資料。</p>}
+          </div>
+        </div>
+      )}
+
+      {/* === 委託單詳細大視窗 Modal === */}
+      {showCommissionModal && currentCommission && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full p-6 max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center border-b pb-4 mb-4">
+              <h3 className="text-xl font-bold flex items-center gap-2"><ClipboardList className="w-5 h-5 text-indigo-600" />委託詳細清單</h3>
+              <button onClick={() => setShowCommissionModal(false)} className="text-gray-500 hover:bg-gray-100 rounded-full p-1"><X className="w-6 h-6"/></button>
+            </div>
+            <div className="space-y-3 text-sm text-gray-700 mb-6 bg-blue-50 p-4 rounded-lg">
+              <p><strong>姓名：</strong> {currentCommission.name}</p>
+              <p><strong>Email：</strong> {currentCommission.email}</p>
+              <p><strong>d-solvent：</strong> {currentCommission.d_solvent || '無'}</p>
+              <p><strong>編碼：</strong> {currentCommission.code || '無'}</p>
+              <p><strong>服務項目：</strong> <span className="bg-indigo-100 text-indigo-800 px-2 py-1 rounded font-medium">{currentCommission.service_item}</span></p>
+              <p><strong>客戶備註：</strong> {currentCommission.client_remark || '無'}</p>
+            </div>
+            <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 space-y-4">
+              <h4 className="font-bold text-gray-800 border-b pb-2">Operator 編輯區塊</h4>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">狀態追蹤</label>
+                <select value={currentCommission.status} onChange={e => setCurrentCommission({...currentCommission, status: e.target.value})} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500">
+                  <option value="未處理">未處理</option><option value="已聯絡">已聯絡</option><option value="測試中">測試中</option><option value="已結案">已結案</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Operator 備註框</label>
+                <textarea rows="2" value={currentCommission.operator_remark || ''} onChange={e => setCurrentCommission({...currentCommission, operator_remark: e.target.value})} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" placeholder="僅供內部人員觀看"></textarea>
+              </div>
+              <div className="flex gap-4">
+                <div className="flex-1"><label className="block text-sm font-medium text-gray-700 mb-1">花費時間 (小時)</label><input type="number" value={currentCommission.used_hours} onChange={e => setCurrentCommission({...currentCommission, used_hours: e.target.value})} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" /></div>
+                <div className="flex-1"><label className="block text-sm font-medium text-gray-700 mb-1">每小時計費</label><input type="number" value={currentCommission.hourly_rate} onChange={e => setCurrentCommission({...currentCommission, hourly_rate: e.target.value})} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" /></div>
+              </div>
+              <div className="bg-red-50 p-3 rounded-lg border border-red-100 mt-2"><p className="text-lg font-bold text-red-700">總共花費金額：$ {Number(currentCommission.used_hours) * Number(currentCommission.hourly_rate)}</p></div>
+            </div>
+            <button onClick={handleUpdateCommission} className="w-full mt-6 py-3 bg-indigo-600 text-white rounded-lg font-bold hover:bg-indigo-700 transition shadow-lg flex justify-center items-center gap-2"><Save className="w-5 h-5"/>儲存並關閉</button>
+          </div>
+        </div>
+      )}
+
+      {/* === 編輯服務項目 Modal === */}
+      {showEditServiceModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl shadow-2xl max-w-sm w-full p-6">
+            <div className="flex justify-between items-center mb-4 border-b pb-2"><h3 className="text-xl font-bold text-gray-800">編輯服務項目</h3><button onClick={() => setShowEditServiceModal(false)} className="text-gray-500 hover:bg-gray-100 rounded-full p-1"><X className="w-5 h-5"/></button></div>
+            <ul className="space-y-2 mb-6 max-h-60 overflow-y-auto">
+              {serviceOptions.map(opt => (
+                <li key={opt.id} className="flex justify-between items-center p-3 bg-gray-50 border border-gray-200 rounded-lg"><span className="font-medium text-gray-700">{opt.item_name}</span><button onClick={() => handleDeleteServiceOption(opt.id)} className="text-red-500 hover:text-red-700 bg-red-50 p-1.5 rounded-lg"><Trash2 className="w-4 h-4"/></button></li>
+              ))}
+              {serviceOptions.length === 0 && <p className="text-center text-gray-400 py-4">目前無任何項目</p>}
+            </ul>
+            <div className="flex gap-2">
+              <input type="text" value={newServiceOption} onChange={e => setNewServiceOption(e.target.value)} placeholder="輸入新項目名稱..." className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" />
+              <button onClick={handleAddServiceOption} className="bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 transition flex items-center justify-center"><Plus className="w-5 h-5"/></button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
