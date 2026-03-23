@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Calendar, Clock, User, LogOut, Settings, X, Check, AlertCircle, UserCheck, UserX, UserPlus, Trash2, Edit, DollarSign, FileWarning, Save, ChevronDown, ChevronRight, Zap } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import { Calendar, Clock, User, LogOut, Settings, X, Check, AlertCircle, UserCheck, UserX, UserPlus, Trash2, Edit, DollarSign, FileWarning, Save, ChevronDown, ChevronRight, Zap, ClipboardList, Bell, ArrowLeft } from 'lucide-react';import { supabase } from '../lib/supabase';
 
 // 輔助函式：取得今天的日期字串 (YYYY-MM-DD)
 const getTodayString = () => {
@@ -55,7 +54,61 @@ export default function NMRBookingSystem() {
   const [hourlyRate, setHourlyRate] = useState(100);
   // ======================
 
+// === 送測服務 CRM State ===
+  const [loginTab, setLoginTab] = useState('internal'); // 'internal' | 'external'
+  const [externalForm, setExternalForm] = useState({ name: '', email: '', solvent: '', code: '', service_item: '', note: '' });
+  const [serviceItems, setServiceItems] = useState([]);
+  const [externalRequests, setExternalRequests] = useState([]);
+  const [showExternalPanel, setShowExternalPanel] = useState(false);
+  const [selectedRequest, setSelectedRequest] = useState(null);
+  const [showServiceItemModal, setShowServiceItemModal] = useState(false);
+  const [newServiceItemName, setNewServiceItemName] = useState('');
+  // ==========================
+
   const INSTRUMENTS = ['60', '500'];
+
+const loadServiceItems = async () => {
+    const { data } = await supabase.from('service_items').select('*').order('name');
+    if (data) setServiceItems(data);
+  };
+
+  const loadExternalRequests = async () => {
+    const { data } = await supabase.from('external_requests').select('*').order('created_at', { ascending: false });
+    if (data) setExternalRequests(data);
+  };
+
+  useEffect(() => {
+    loadServiceItems();
+    loadExternalRequests(); // 系統載入時預先讀取，為了算紅點數量
+  }, []);
+
+  const handleExternalSubmit = async () => {
+    if (!externalForm.name || !externalForm.email || !externalForm.service_item || !externalForm.code) {
+      alert('請填寫必填欄位 (姓名、Email、編碼、服務項目)');
+      return;
+    }
+    try {
+      const { error } = await supabase.from('external_requests').insert([{ ...externalForm }]);
+      if (error) throw error;
+      alert('表單送出成功！我們會盡快與您聯絡。');
+      setExternalForm({ name: '', email: '', solvent: '', code: '', service_item: '', note: '' });
+      // 這裡未來可以觸發 LINE Notify Webhook
+    } catch (error) {
+      console.error(error);
+      alert('送出失敗，請稍後再試');
+    }
+  };
+
+  const handleUpdateRequest = async (id, updates) => {
+    try {
+      const { error } = await supabase.from('external_requests').update(updates).eq('id', id);
+      if (error) throw error;
+      await loadExternalRequests();
+      if (selectedRequest) setSelectedRequest({ ...selectedRequest, ...updates });
+    } catch (error) {
+      alert('更新失敗');
+    }
+  };
 
   // 生成時段
   const generateTimeSlots = useCallback(() => {
@@ -302,6 +355,8 @@ export default function NMRBookingSystem() {
     setShowLabManagementPanel(false);
     setShowTimeSlotPanel(false);
     setBookings([]);
+    setShowExternalPanel(false);
+    setSelectedRequest(null);
   };
 
   const isTimePassed = (date, timeSlot) => {
@@ -985,79 +1040,37 @@ export default function NMRBookingSystem() {
     );
   };
 
-  if (!isLoggedIn) {
+if (!isLoggedIn) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
         <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full overflow-hidden">
           <div className="flex flex-col md:flex-row">
-            <div className="md:w-1/2 p-8">
+            
+            {/* ====== 左半邊：登入與送測表單區塊 ====== */}
+            <div className="md:w-1/2 p-6 md:p-8 flex flex-col h-full relative">
               <div className="flex items-center gap-3 mb-6">
                 <Calendar className="w-8 h-8 text-indigo-600" />
                 <h1 className="text-3xl font-bold text-gray-800">NMR預約系統</h1>
               </div>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">帳號 Account</label>
-                  <input
-                    type="text"
-                    value={loginForm.username}
-                    onChange={(e) => setLoginForm({...loginForm, username: e.target.value})}
-                    onKeyPress={(e) => e.key === 'Enter' && handleLogin()}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">密碼 Password</label>
-                  <input
-                    type="password"
-                    value={loginForm.password}
-                    onChange={(e) => setLoginForm({...loginForm, password: e.target.value})}
-                    onKeyPress={(e) => e.key === 'Enter' && handleLogin()}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                  />
-                </div>
-                <button
-                  onClick={handleLogin}
-                  className="w-full bg-indigo-600 text-white py-3 rounded-lg hover:bg-indigo-700 transition font-medium"
-                >
-                  登入 Login
-                </button>
-              </div>
-              <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                <div className="flex items-start gap-2">
-                  <AlertCircle className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
-                  <div className="text-sm text-blue-800">
-                    <p className="mb-1">請使用您的帳號密碼登入系統</p>
-                    <p>Please login with your account and password</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className="md:w-1/2 bg-indigo-600 text-white p-8 flex flex-col max-h-screen">
-              <h2 className="text-2xl font-bold mb-6 flex-shrink-0">使用規則 Rules</h2>
-              <div className="space-y-4 overflow-y-auto flex-1 pr-2">
-                {systemSettings ? (
-                  [1, 2, 3, 4, 5, 6, 7].map(num => {
-                    const ruleText = systemSettings[`rule${num}`];
-                    if (!ruleText || ruleText.trim() === '') return null;
-                    return (
-                      <div key={num} className="flex items-start gap-3">
-                        <Check className="w-5 h-5 mt-1 flex-shrink-0" />
-                        <p className="whitespace-pre-wrap">{ruleText}</p>
-                      </div>
-                    );
-                  })
-                ) : (
-                  <p>載入中...</p>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
+              {/* 真實標籤頁 (Folder Tabs) 設計 */}
+              <div className="flex border-b border-gray-300 mb-5">
+                <button 
+                  onClick={() => setLoginTab('internal')}
+                  className={`flex-1 py-2.5 px-4 text-center text-sm md:text-base transition-all duration-200 rounded-t-lg border-t border-l border-r ${
+                    loginTab === 'internal' 
+                      ? 'bg-white text-indigo-600 font-bold border-gray-300 border-b-white -mb-px z-10' 
+                      : 'bg-gray-100 text-gray-500 font-medium border-transparent hover:bg-gray-200 hover:text-gray-700'
+                  }`}
+                >
+                  校內登入
+                </button>
+                <button 
+                  onClick={() => setLoginTab('external')}
+                  className={`flex-1 py-2.5 px-4 text-center text-sm md:text-base transition-all duration-200 rounded-t-lg border-t border-l border-r ${
+                    loginTab === 'external' 
+                      ? 'bg-white text-indigo-600 font-bold border-gray-300 border-b-white -mb-px z-10' 
+                      : 'bg-gray-100 text-gray-
   if (showNotification) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
@@ -1529,6 +1542,167 @@ export default function NMRBookingSystem() {
     );
   }
 
+// === 校外委託管理面板 ===
+  if (showExternalPanel && currentUser?.is_admin) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <div className="bg-white shadow-sm border-b">
+          <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
+            <h1 className="text-2xl font-bold text-gray-800">校外委託管理 (CRM)</h1>
+            <div className="flex gap-3">
+              <button onClick={() => setShowServiceItemModal(true)} className="flex items-center gap-2 px-4 py-2 bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 transition"><Settings className="w-4 h-4" />編輯服務項目</button>
+              <button onClick={() => setShowExternalPanel(false)} className="flex items-center gap-2 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition"><ArrowLeft className="w-4 h-4" />返回</button>
+            </div>
+          </div>
+        </div>
+        
+        <div className="max-w-7xl mx-auto p-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {externalRequests.map(req => (
+              <div key={req.id} onClick={() => setSelectedRequest(req)} className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm hover:shadow-md cursor-pointer transition flex flex-col h-full">
+                <div className="flex justify-between items-start mb-3">
+                  <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${req.status === '未處理' ? 'bg-red-100 text-red-700' : req.status === '已聯絡' ? 'bg-yellow-100 text-yellow-700' : req.status === '已完成' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}`}>{req.status}</span>
+                  <span className="text-xs text-gray-400">{new Date(req.created_at).toLocaleDateString()}</span>
+                </div>
+                <h3 className="text-lg font-bold text-gray-800 mb-1">{req.name}</h3>
+                <p className="text-sm text-gray-500 mb-4 flex-1">編碼: <span className="font-semibold text-gray-700">{req.code}</span><br/>服務: {req.service_item}</p>
+                <div className="border-t pt-3 mt-auto flex justify-between text-sm">
+                  <span className="text-gray-500">耗時: {req.time_spent} hr</span>
+                  <span className="font-bold text-indigo-600">${req.total_cost}</span>
+                </div>
+              </div>
+            ))}
+            {externalRequests.length === 0 && <div className="col-span-full text-center py-12 text-gray-500">目前尚無委託單</div>}
+          </div>
+        </div>
+
+        {/* 委託單詳細內容 Modal */}
+        {selectedRequest && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto">
+              <div className="flex justify-between items-center mb-6 border-b pb-4">
+                <h2 className="text-2xl font-bold text-gray-800">委託單詳細資訊</h2>
+                <button onClick={() => setSelectedRequest(null)} className="text-gray-500 hover:text-gray-700"><X className="w-6 h-6" /></button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-6 mb-6">
+                <div className="space-y-3 bg-gray-50 p-4 rounded-lg">
+                  <h3 className="font-bold text-gray-700 border-b pb-2">客戶填寫內容</h3>
+                  <p className="text-sm"><span className="text-gray-500">姓名:</span> {selectedRequest.name}</p>
+                  <p className="text-sm"><span className="text-gray-500">Email:</span> {selectedRequest.email}</p>
+                  <p className="text-sm"><span className="text-gray-500">編碼:</span> {selectedRequest.code}</p>
+                  <p className="text-sm"><span className="text-gray-500">Solvent:</span> {selectedRequest.solvent}</p>
+                  <p className="text-sm"><span className="text-gray-500">服務:</span> {selectedRequest.service_item}</p>
+                  <p className="text-sm"><span className="text-gray-500">備註:</span> {selectedRequest.note || '無'}</p>
+                </div>
+
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">狀態追蹤</label>
+                    <select 
+                      value={selectedRequest.status} 
+                      onChange={(e) => handleUpdateRequest(selectedRequest.id, { status: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                    >
+                      <option value="未處理">未處理</option>
+                      <option value="已聯絡">已聯絡</option>
+                      <option value="處理中">處理中</option>
+                      <option value="已完成">已完成</option>
+                      <option value="已取消">已取消</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">管理員備註 (給Operator用)</label>
+                    <textarea 
+                      value={selectedRequest.admin_note || ''} 
+                      onChange={(e) => handleUpdateRequest(selectedRequest.id, { admin_note: e.target.value })}
+                      rows={3}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">花費時間 (hr)</label>
+                      <input 
+                        type="number" 
+                        value={selectedRequest.time_spent} 
+                        onChange={(e) => {
+                          const time = Number(e.target.value);
+                          handleUpdateRequest(selectedRequest.id, { time_spent: time, total_cost: time * selectedRequest.hourly_rate });
+                        }}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">每小時費率</label>
+                      <input 
+                        type="number" 
+                        value={selectedRequest.hourly_rate} 
+                        onChange={(e) => {
+                          const rate = Number(e.target.value);
+                          handleUpdateRequest(selectedRequest.id, { hourly_rate: rate, total_cost: selectedRequest.time_spent * rate });
+                        }}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                      />
+                    </div>
+                  </div>
+                  <div className="bg-indigo-50 p-3 rounded-lg flex justify-between items-center">
+                    <span className="font-bold text-indigo-800">總花費金額</span>
+                    <span className="font-bold text-xl text-indigo-600">${selectedRequest.total_cost}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 編輯服務項目 Modal */}
+        {showServiceItemModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-xl shadow-2xl max-w-sm w-full p-6">
+              <div className="flex justify-between items-center mb-4 border-b pb-2">
+                <h2 className="text-xl font-bold text-gray-800">編輯服務項目</h2>
+                <button onClick={() => setShowServiceItemModal(false)} className="text-gray-500 hover:text-gray-700"><X className="w-5 h-5" /></button>
+              </div>
+              <ul className="space-y-2 mb-4 max-h-48 overflow-y-auto">
+                {serviceItems.map(item => (
+                  <li key={item.id} className="flex justify-between items-center bg-gray-50 px-3 py-2 rounded border">
+                    <span className="text-sm">{item.name}</span>
+                    <button 
+                      onClick={async () => {
+                        await supabase.from('service_items').delete().eq('id', item.id);
+                        loadServiceItems();
+                      }}
+                      className="text-red-500 hover:text-red-700"
+                    ><Trash2 className="w-4 h-4" /></button>
+                  </li>
+                ))}
+              </ul>
+              <div className="flex gap-2">
+                <input 
+                  type="text" 
+                  value={newServiceItemName} 
+                  onChange={(e) => setNewServiceItemName(e.target.value)} 
+                  placeholder="新增項目..." 
+                  className="flex-1 px-3 py-2 border rounded-lg text-sm"
+                />
+                <button 
+                  onClick={async () => {
+                    if (!newServiceItemName) return;
+                    await supabase.from('service_items').insert([{ name: newServiceItemName }]);
+                    setNewServiceItemName('');
+                    loadServiceItems();
+                  }}
+                  className="px-3 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm"
+                >新增</button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   if (showAdminPanel && currentUser?.is_admin) {
     return (
       <div className="min-h-screen bg-gray-50">
@@ -1619,6 +1793,16 @@ export default function NMRBookingSystem() {
               </div>
               {currentUser?.is_admin && (
                 <>
+                  <button onClick={() => setShowExternalPanel(true)} className="flex items-center gap-2 px-3 py-2 bg-yellow-100 text-yellow-800 rounded-lg hover:bg-yellow-200 transition text-sm relative">
+                    <ClipboardList className="w-4 h-4" />
+                    校外委託管理
+                    {externalRequests.filter(r => r.status === '未處理').length > 0 && (
+                      <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
+                      </span>
+                    )}
+                  </button>
                   <button onClick={() => setShowAdminPanel(true)} className="flex items-center gap-2 px-3 py-2 bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 transition text-sm"><Settings className="w-4 h-4" />用戶管理</button>
                   <button onClick={() => setShowHistoryNotice(true)} className="flex items-center gap-2 px-3 py-2 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 transition text-sm"><Calendar className="w-4 h-4" />歷史記錄</button>
                   <button onClick={() => setShowTimeSlotPanel(true)} className="flex items-center gap-2 px-3 py-2 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition text-sm"><Clock className="w-4 h-4" />時段設定</button>
