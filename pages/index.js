@@ -1199,7 +1199,7 @@ if (!isLoggedIn) {
                       ))}
                     </div>
 
-                    {/* === 備註框 (移除 resize-none，增加 rows) === */}
+                    {/* === 備註框 === */}
                     <div>
                       <label className="block text-xs font-medium text-gray-700 mb-1">備註 (可拖曳右下角放大)</label>
                       <textarea 
@@ -1212,6 +1212,9 @@ if (!isLoggedIn) {
                     </div>
                     <button onClick={handleExternalSubmit} className="w-full bg-green-600 text-white py-3 rounded-lg hover:bg-green-700 transition font-medium mt-2 shadow-sm hover:shadow-md">送出申請 Submit</button>
                   </div>
+                )}
+              </div>
+            </div>
 
             {/* ====== 右半邊：動態切換規則與背景色 ====== */}
             <div className={`md:w-1/2 text-white p-8 flex flex-col max-h-screen transition-colors duration-500 ${loginTab === 'internal' ? 'bg-indigo-600' : 'bg-teal-600'}`}>
