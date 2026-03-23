@@ -56,7 +56,25 @@ export default function NMRBookingSystem() {
 
 // === 送測服務 CRM State ===
   const [loginTab, setLoginTab] = useState('internal'); // 'internal' | 'external'
-  const [externalForm, setExternalForm] = useState({ name: '', email: '', solvent: '', code: '', service_item: '', note: '' });
+  const [externalForm, setExternalForm] = useState({ 
+    name: '', email: '', note: '', 
+    samples: [{ solvent: '', code: '', service_item: '' }] 
+  });
+
+  const handleSampleChange = (index, field, value) => {
+    const newSamples = [...externalForm.samples];
+    newSamples[index][field] = value;
+    setExternalForm({ ...externalForm, samples: newSamples });
+  };
+
+  const addSample = () => {
+    setExternalForm({ ...externalForm, samples: [...externalForm.samples, { solvent: '', code: '', service_item: '' }] });
+  };
+
+  const removeSample = (index) => {
+    const newSamples = externalForm.samples.filter((_, i) => i !== index);
+    setExternalForm({ ...externalForm, samples: newSamples });
+  };
   const [serviceItems, setServiceItems] = useState([]);
   const [externalRequests, setExternalRequests] = useState([]);
   const [showExternalPanel, setShowExternalPanel] = useState(false);
@@ -83,33 +101,39 @@ const loadServiceItems = async () => {
   }, []);
 
 const handleExternalSubmit = async () => {
-    if (!externalForm.name || !externalForm.email || !externalForm.service_item || !externalForm.code) {
-      alert('請填寫必填欄位 (姓名、Email、編碼、服務項目)');
+    if (!externalForm.name || !externalForm.email) {
+      alert('請填寫必填欄位 (姓名、Email)');
       return;
     }
+    
+    // 檢查是不是每個樣品都有填寫編碼跟服務項目
+    const hasInvalidSample = externalForm.samples.some(s => !s.code || !s.service_item);
+    if (hasInvalidSample) {
+      alert('請確保「所有樣品」都已填寫編碼與服務項目');
+      return;
+    }
+
     try {
-      const { error } = await supabase.from('external_requests').insert([{ ...externalForm }]);
-      if (error) throw error;
-      alert('表單送出成功！我們會盡快與您聯絡。');
-      setExternalForm({ name: '', email: '', solvent: '', code: '', service_item: '', note: '' });
+      // 這裡送出給 Supabase
+      const { error } = await supabase.from('external_requests').insert([{ 
+        name: externalForm.name,
+        email: externalForm.email,
+        note: externalForm.note,
+        samples: externalForm.samples
+      }]);
       
-      // === 加入這行：送出後立刻重新抓取最新資料 ===
-      await loadExternalRequests(); 
+      if (error) throw error;
+      
+      alert('表單送出成功！我們會盡快與您聯絡。');
+      setExternalForm({ 
+        name: '', email: '', note: '', 
+        samples: [{ solvent: '', code: '', service_item: '' }] 
+      });
+      await loadExternalRequests();
       
     } catch (error) {
       console.error(error);
       alert('送出失敗，請稍後再試');
-    }
-  };
-
-  const handleUpdateRequest = async (id, updates) => {
-    try {
-      const { error } = await supabase.from('external_requests').update(updates).eq('id', id);
-      if (error) throw error;
-      await loadExternalRequests();
-      if (selectedRequest) setSelectedRequest({ ...selectedRequest, ...updates });
-    } catch (error) {
-      alert('更新失敗');
     }
   };
 
@@ -1139,31 +1163,55 @@ if (!isLoggedIn) {
                   </div>
                 ) : (
                   /* --- 狀態 2：送測服務表單 --- */
-                  <div className="space-y-3 pb-2">
+                  <div className="space-y-4 pb-4">
                     <div className="grid grid-cols-2 gap-3">
                       <div><label className="block text-xs font-medium text-gray-700 mb-1">姓名 *</label><input type="text" value={externalForm.name} onChange={(e) => setExternalForm({...externalForm, name: e.target.value})} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm bg-gray-50 focus:bg-white transition-colors" placeholder="請輸入姓名" /></div>
                       <div><label className="block text-xs font-medium text-gray-700 mb-1">Email *</label><input type="email" value={externalForm.email} onChange={(e) => setExternalForm({...externalForm, email: e.target.value})} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm bg-gray-50 focus:bg-white transition-colors" placeholder="聯絡信箱" /></div>
                     </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div><label className="block text-xs font-medium text-gray-700 mb-1">D-Solvent</label><input type="text" value={externalForm.solvent} onChange={(e) => setExternalForm({...externalForm, solvent: e.target.value})} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm bg-gray-50 focus:bg-white transition-colors" placeholder="例如: CDCl3" /></div>
-                      <div><label className="block text-xs font-medium text-gray-700 mb-1">編碼 *</label><input type="text" value={externalForm.code} onChange={(e) => setExternalForm({...externalForm, code: e.target.value})} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm bg-gray-50 focus:bg-white transition-colors" placeholder="樣品編號" /></div>
+
+                    {/* === 動態樣品清單區塊 === */}
+                    <div className="bg-indigo-50/50 border border-indigo-100 rounded-lg p-3 space-y-3 max-h-[35vh] overflow-y-auto">
+                      <div className="flex justify-between items-center mb-1">
+                        <label className="block text-sm font-bold text-indigo-800">樣品清單 Samples</label>
+                        <button onClick={addSample} className="text-xs bg-indigo-600 text-white px-2 py-1 rounded hover:bg-indigo-700 transition shadow-sm">+ 新增樣品</button>
+                      </div>
+                      
+                      {externalForm.samples.map((sample, index) => (
+                        <div key={index} className="bg-white p-3 border border-indigo-200 rounded-lg relative shadow-sm">
+                          <h4 className="text-xs font-bold text-gray-500 mb-2 border-b pb-1">樣品 #{index + 1}</h4>
+                          {externalForm.samples.length > 1 && (
+                            <button onClick={() => removeSample(index)} className="absolute top-2 right-2 text-red-400 hover:text-red-600 p-1 bg-red-50 rounded">
+                              <X className="w-3 h-3" />
+                            </button>
+                          )}
+                          <div className="grid grid-cols-2 gap-3 mb-2">
+                            <div><label className="block text-xs font-medium text-gray-700 mb-1">D-Solvent</label><input type="text" value={sample.solvent} onChange={(e) => handleSampleChange(index, 'solvent', e.target.value)} className="w-full px-2 py-1.5 border border-gray-300 rounded focus:ring-1 focus:ring-indigo-500 text-sm" placeholder="例如: CDCl3" /></div>
+                            <div><label className="block text-xs font-medium text-gray-700 mb-1">編碼 *</label><input type="text" value={sample.code} onChange={(e) => handleSampleChange(index, 'code', e.target.value)} className="w-full px-2 py-1.5 border border-gray-300 rounded focus:ring-1 focus:ring-indigo-500 text-sm" placeholder="樣品編號" /></div>
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-gray-700 mb-1">服務項目 *</label>
+                            <select value={sample.service_item} onChange={(e) => handleSampleChange(index, 'service_item', e.target.value)} className="w-full px-2 py-1.5 border border-gray-300 rounded focus:ring-1 focus:ring-indigo-500 text-sm">
+                              <option value="">請選擇服務項目</option>
+                              {serviceItems.map(item => (<option key={item.id} value={item.name}>{item.name}</option>))}
+                            </select>
+                          </div>
+                        </div>
+                      ))}
                     </div>
+
+                    {/* === 備註框 (移除 resize-none，增加 rows) === */}
                     <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-1">服務項目 *</label>
-                      <select value={externalForm.service_item} onChange={(e) => setExternalForm({...externalForm, service_item: e.target.value})} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm bg-gray-50 focus:bg-white transition-colors">
-                        <option value="">請選擇服務項目</option>
-                        {serviceItems.map(item => (<option key={item.id} value={item.name}>{item.name}</option>))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-1">備註</label>
-                      <textarea value={externalForm.note} onChange={(e) => setExternalForm({...externalForm, note: e.target.value})} rows={2} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm bg-gray-50 focus:bg-white transition-colors resize-none" placeholder="其他需要特別說明的需求..." />
+                      <label className="block text-xs font-medium text-gray-700 mb-1">備註 (可拖曳右下角放大)</label>
+                      <textarea 
+                        value={externalForm.note} 
+                        onChange={(e) => setExternalForm({...externalForm, note: e.target.value})} 
+                        rows={4} 
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm bg-gray-50 focus:bg-white transition-colors" 
+                        placeholder="其他需要特別說明的需求..." 
+                      />
                     </div>
                     <button onClick={handleExternalSubmit} className="w-full bg-green-600 text-white py-3 rounded-lg hover:bg-green-700 transition font-medium mt-2 shadow-sm hover:shadow-md">送出申請 Submit</button>
                   </div>
-                )}
-              </div>
-            </div>
 
             {/* ====== 右半邊：動態切換規則與背景色 ====== */}
             <div className={`md:w-1/2 text-white p-8 flex flex-col max-h-screen transition-colors duration-500 ${loginTab === 'internal' ? 'bg-indigo-600' : 'bg-teal-600'}`}>
@@ -1711,28 +1759,35 @@ if (!isLoggedIn) {
         
         <div className="max-w-7xl mx-auto p-4">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {externalRequests.map(req => (
-              <div key={req.id} onClick={() => setSelectedRequest(req)} className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm hover:shadow-md cursor-pointer transition flex flex-col h-full">
-              <div className="flex justify-between items-start mb-3">
-                  <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${req.status === '未處理' ? 'bg-red-100 text-red-700' : req.status === '已聯絡' ? 'bg-yellow-100 text-yellow-700' : req.status === '已完成' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}`}>{req.status}</span>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-gray-400">{new Date(req.created_at).toLocaleDateString()}</span>
-                    <button 
-                      onClick={(e) => handleDeleteRequest(req.id, req.name, e)}
-                      className="text-red-400 hover:text-red-600 p-1 rounded hover:bg-red-50 transition-colors"
-                      title="刪除此委託單"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+            {externalRequests.map(req => {
+              const sampleCount = req.samples?.length || 0;
+              const firstSample = req.samples?.[0] || {};
+              return (
+                <div key={req.id} onClick={() => setSelectedRequest(req)} className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm hover:shadow-md cursor-pointer transition flex flex-col h-full relative overflow-hidden">
+                  {/* 側邊裝飾條 */}
+                  <div className={`absolute left-0 top-0 bottom-0 w-1 ${req.status === '未處理' ? 'bg-red-400' : req.status === '已完成' ? 'bg-green-400' : 'bg-gray-300'}`}></div>
+                  
+                  <div className="flex justify-between items-start mb-3 pl-2">
+                    <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${req.status === '未處理' ? 'bg-red-100 text-red-700' : req.status === '已聯絡' ? 'bg-yellow-100 text-yellow-700' : req.status === '已完成' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}`}>{req.status}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-gray-400">{new Date(req.created_at).toLocaleDateString()}</span>
+                      <button onClick={(e) => handleDeleteRequest(req.id, req.name, e)} className="text-red-400 hover:text-red-600 p-1 rounded hover:bg-red-50 transition-colors" title="刪除此委託單"><Trash2 className="w-4 h-4" /></button>
+                    </div>
                   </div>
-                </div>                <h3 className="text-lg font-bold text-gray-800 mb-1">{req.name}</h3>
-                <p className="text-sm text-gray-500 mb-4 flex-1">編碼: <span className="font-semibold text-gray-700">{req.code}</span><br/>服務: {req.service_item}</p>
-                <div className="border-t pt-3 mt-auto flex justify-between text-sm">
-                  <span className="text-gray-500">耗時: {req.time_spent} hr</span>
-                  <span className="font-bold text-indigo-600">${req.total_cost}</span>
+                  <h3 className="text-lg font-bold text-gray-800 mb-1 pl-2">{req.name}</h3>
+                  <div className="text-sm text-gray-500 mb-4 flex-1 pl-2">
+                    <p className="font-semibold text-indigo-600 mb-1">共 {sampleCount} 件樣品</p>
+                    {sampleCount > 0 && (
+                      <p className="text-xs truncate text-gray-400">代表編碼: {firstSample.code}</p>
+                    )}
+                  </div>
+                  <div className="border-t pt-3 mt-auto flex justify-between text-sm pl-2">
+                    <span className="text-gray-500">耗時: {req.time_spent} hr</span>
+                    <span className="font-bold text-indigo-600">${req.total_cost}</span>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
             {externalRequests.length === 0 && <div className="col-span-full text-center py-12 text-gray-500">目前尚無委託單</div>}
           </div>
         </div>
@@ -1740,23 +1795,49 @@ if (!isLoggedIn) {
         {/* 委託單詳細內容 Modal */}
         {selectedRequest && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-            <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto">
+            <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full p-6 max-h-[90vh] overflow-y-auto">
               <div className="flex justify-between items-center mb-6 border-b pb-4">
                 <h2 className="text-2xl font-bold text-gray-800">委託單詳細資訊</h2>
                 <button onClick={() => setSelectedRequest(null)} className="text-gray-500 hover:text-gray-700"><X className="w-6 h-6" /></button>
               </div>
 
-              <div className="grid grid-cols-2 gap-6 mb-6">
-                <div className="space-y-3 bg-gray-50 p-4 rounded-lg">
-                  <h3 className="font-bold text-gray-700 border-b pb-2">客戶填寫內容</h3>
-                  <p className="text-sm"><span className="text-gray-500">姓名:</span> {selectedRequest.name}</p>
-                  <p className="text-sm"><span className="text-gray-500">Email:</span> {selectedRequest.email}</p>
-                  <p className="text-sm"><span className="text-gray-500">編碼:</span> {selectedRequest.code}</p>
-                  <p className="text-sm"><span className="text-gray-500">Solvent:</span> {selectedRequest.solvent}</p>
-                  <p className="text-sm"><span className="text-gray-500">服務:</span> {selectedRequest.service_item}</p>
-                  <p className="text-sm"><span className="text-gray-500">備註:</span> {selectedRequest.note || '無'}</p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                
+                {/* 左側：客戶填寫內容 */}
+                <div className="space-y-4">
+                  <div className="bg-gray-50 p-4 rounded-lg border">
+                    <h3 className="font-bold text-gray-700 border-b pb-2 mb-3">客戶基本資料</h3>
+                    <p className="text-sm mb-1"><span className="text-gray-500">姓名:</span> {selectedRequest.name}</p>
+                    <p className="text-sm mb-1"><span className="text-gray-500">Email:</span> {selectedRequest.email}</p>
+                    <div className="mt-3 pt-3 border-t">
+                      <span className="text-gray-500 text-sm block mb-1">備註:</span>
+                      <p className="text-sm whitespace-pre-wrap bg-white p-2 rounded border">{selectedRequest.note || '無'}</p>
+                    </div>
+                  </div>
+
+                  {/* 多樣品清單顯示 */}
+                  <div className="bg-indigo-50/50 p-4 rounded-lg border border-indigo-100">
+                    <h3 className="font-bold text-indigo-800 border-b border-indigo-200 pb-2 mb-3">
+                      樣品清單 (共 {selectedRequest.samples?.length || 0} 件)
+                    </h3>
+                    <div className="space-y-2 max-h-48 overflow-y-auto pr-2">
+                      {selectedRequest.samples?.map((s, idx) => (
+                        <div key={idx} className="bg-white p-3 rounded shadow-sm border border-gray-100 text-sm">
+                          <div className="flex justify-between items-center mb-1">
+                            <span className="font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded text-xs">#{idx + 1}</span>
+                            <span className="font-semibold text-gray-800">{s.code}</span>
+                          </div>
+                          <div className="flex flex-col text-xs text-gray-600 space-y-1 mt-2">
+                            <p>Solvent: <span className="text-gray-800">{s.solvent || '未填'}</span></p>
+                            <p>服務: <span className="text-indigo-700 font-medium">{s.service_item}</span></p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 </div>
 
+                {/* 右側：狀態追蹤與計費 */}
                 <div className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">狀態追蹤</label>
@@ -1777,39 +1858,44 @@ if (!isLoggedIn) {
                     <textarea 
                       value={selectedRequest.admin_note || ''} 
                       onChange={(e) => handleUpdateRequest(selectedRequest.id, { admin_note: e.target.value })}
-                      rows={3}
+                      rows={4}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                      placeholder="紀錄處理進度或測量結果..."
                     />
                   </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-1">花費時間 (hr)</label>
-                      <input 
-                        type="number" 
-                        value={selectedRequest.time_spent} 
-                        onChange={(e) => {
-                          const time = Number(e.target.value);
-                          handleUpdateRequest(selectedRequest.id, { time_spent: time, total_cost: time * selectedRequest.hourly_rate });
-                        }}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                      />
+                  
+                  <div className="bg-gray-50 p-4 rounded-lg border">
+                    <h3 className="font-bold text-gray-700 mb-3 border-b pb-2">費用計算</h3>
+                    <div className="grid grid-cols-2 gap-3 mb-4">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">花費時間 (hr)</label>
+                        <input 
+                          type="number" 
+                          value={selectedRequest.time_spent} 
+                          onChange={(e) => {
+                            const time = Number(e.target.value);
+                            handleUpdateRequest(selectedRequest.id, { time_spent: time, total_cost: time * selectedRequest.hourly_rate });
+                          }}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">每小時費率</label>
+                        <input 
+                          type="number" 
+                          value={selectedRequest.hourly_rate} 
+                          onChange={(e) => {
+                            const rate = Number(e.target.value);
+                            handleUpdateRequest(selectedRequest.id, { hourly_rate: rate, total_cost: selectedRequest.time_spent * rate });
+                          }}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500"
+                        />
+                      </div>
                     </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-1">每小時費率</label>
-                      <input 
-                        type="number" 
-                        value={selectedRequest.hourly_rate} 
-                        onChange={(e) => {
-                          const rate = Number(e.target.value);
-                          handleUpdateRequest(selectedRequest.id, { hourly_rate: rate, total_cost: selectedRequest.time_spent * rate });
-                        }}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                      />
+                    <div className="bg-indigo-600 p-3 rounded-lg flex justify-between items-center text-white shadow-inner">
+                      <span className="font-bold opacity-90">總花費金額</span>
+                      <span className="font-bold text-2xl">${selectedRequest.total_cost}</span>
                     </div>
-                  </div>
-                  <div className="bg-indigo-50 p-3 rounded-lg flex justify-between items-center">
-                    <span className="font-bold text-indigo-800">總花費金額</span>
-                    <span className="font-bold text-xl text-indigo-600">${selectedRequest.total_cost}</span>
                   </div>
                 </div>
               </div>
