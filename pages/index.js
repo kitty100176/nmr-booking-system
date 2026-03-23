@@ -1040,6 +1040,7 @@ const loadServiceItems = async () => {
     );
   };
 
+
 if (!isLoggedIn) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
@@ -1070,7 +1071,110 @@ if (!isLoggedIn) {
                   className={`flex-1 py-2.5 px-4 text-center text-sm md:text-base transition-all duration-200 rounded-t-lg border-t border-l border-r ${
                     loginTab === 'external' 
                       ? 'bg-white text-indigo-600 font-bold border-gray-300 border-b-white -mb-px z-10' 
-                      : 'bg-gray-100 text-gray-
+                      : 'bg-gray-100 text-gray-500 font-medium border-transparent hover:bg-gray-200 hover:text-gray-700'
+                  }`}
+                >
+                  送測服務
+                </button>
+              </div>
+
+              {/* 表單切換內容區 */}
+              <div className="flex-1 overflow-y-auto pr-2">
+                {loginTab === 'internal' ? (
+                  /* --- 狀態 1：校內登入 --- */
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">帳號 Account</label>
+                      <input
+                        type="text"
+                        value={loginForm.username}
+                        onChange={(e) => setLoginForm({...loginForm, username: e.target.value})}
+                        onKeyPress={(e) => e.key === 'Enter' && handleLogin()}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">密碼 Password</label>
+                      <input
+                        type="password"
+                        value={loginForm.password}
+                        onChange={(e) => setLoginForm({...loginForm, password: e.target.value})}
+                        onKeyPress={(e) => e.key === 'Enter' && handleLogin()}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                      />
+                    </div>
+                    <button
+                      onClick={handleLogin}
+                      className="w-full bg-indigo-600 text-white py-3 rounded-lg hover:bg-indigo-700 transition font-medium shadow-sm hover:shadow-md"
+                    >
+                      登入 Login
+                    </button>
+                    <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                      <div className="flex items-start gap-2">
+                        <AlertCircle className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
+                        <div className="text-sm text-blue-800">
+                          <p className="mb-1">請使用您的帳號密碼登入系統</p>
+                          <p>Please login with your account and password</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  /* --- 狀態 2：送測服務表單 --- */
+                  <div className="space-y-3 pb-2">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div><label className="block text-xs font-medium text-gray-700 mb-1">姓名 *</label><input type="text" value={externalForm.name} onChange={(e) => setExternalForm({...externalForm, name: e.target.value})} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm bg-gray-50 focus:bg-white transition-colors" placeholder="請輸入姓名" /></div>
+                      <div><label className="block text-xs font-medium text-gray-700 mb-1">Email *</label><input type="email" value={externalForm.email} onChange={(e) => setExternalForm({...externalForm, email: e.target.value})} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm bg-gray-50 focus:bg-white transition-colors" placeholder="聯絡信箱" /></div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div><label className="block text-xs font-medium text-gray-700 mb-1">D-Solvent</label><input type="text" value={externalForm.solvent} onChange={(e) => setExternalForm({...externalForm, solvent: e.target.value})} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm bg-gray-50 focus:bg-white transition-colors" placeholder="例如: CDCl3" /></div>
+                      <div><label className="block text-xs font-medium text-gray-700 mb-1">編碼 *</label><input type="text" value={externalForm.code} onChange={(e) => setExternalForm({...externalForm, code: e.target.value})} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm bg-gray-50 focus:bg-white transition-colors" placeholder="樣品編號" /></div>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">服務項目 *</label>
+                      <select value={externalForm.service_item} onChange={(e) => setExternalForm({...externalForm, service_item: e.target.value})} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm bg-gray-50 focus:bg-white transition-colors">
+                        <option value="">請選擇服務項目</option>
+                        {serviceItems.map(item => (<option key={item.id} value={item.name}>{item.name}</option>))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">備註</label>
+                      <textarea value={externalForm.note} onChange={(e) => setExternalForm({...externalForm, note: e.target.value})} rows={2} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm bg-gray-50 focus:bg-white transition-colors resize-none" placeholder="其他需要特別說明的需求..." />
+                    </div>
+                    <button onClick={handleExternalSubmit} className="w-full bg-green-600 text-white py-3 rounded-lg hover:bg-green-700 transition font-medium mt-2 shadow-sm hover:shadow-md">送出申請 Submit</button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* ====== 右半邊：使用規則 (維持原樣) ====== */}
+            <div className="md:w-1/2 bg-indigo-600 text-white p-8 flex flex-col max-h-screen">
+              <h2 className="text-2xl font-bold mb-6 flex-shrink-0">使用規則 Rules</h2>
+              <div className="space-y-4 overflow-y-auto flex-1 pr-2">
+                {systemSettings ? (
+                  [1, 2, 3, 4, 5, 6, 7].map(num => {
+                    const ruleText = systemSettings[`rule${num}`];
+                    if (!ruleText || ruleText.trim() === '') return null;
+                    return (
+                      <div key={num} className="flex items-start gap-3">
+                        <Check className="w-5 h-5 mt-1 flex-shrink-0" />
+                        <p className="whitespace-pre-wrap">{ruleText}</p>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <p>載入中...</p>
+                )}
+              </div>
+            </div>
+            
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+
   if (showNotification) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
