@@ -69,7 +69,8 @@ export default function NMRBookingSystem() {
 
   // 生成時段
   const generateTimeSlots = useCallback(() => {
-    if (!timeSlotSettings) return [];
+    // 加上這行安全檢查：如果 timeSlotSettings 還沒準備好，就先回傳空陣列
+    if (!timeSlotSettings || !timeSlotSettings.day_start) return [];
     
     const slots = [];
     const { day_start, day_end, day_interval, night_start, night_end, night_interval } = timeSlotSettings;
@@ -110,8 +111,6 @@ export default function NMRBookingSystem() {
     return uniqueSlots;
 
   }, [timeSlotSettings]);
-
-  const timeSlots = useMemo(() => generateTimeSlots(), [generateTimeSlots]);
 
   // 資料載入函式
   const loadBookings = useCallback(async () => {
