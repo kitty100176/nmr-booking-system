@@ -39,7 +39,7 @@ export default async function handler(req, res) {
         auth: { user: emailUser, pass: emailPass }
       });
 
-      const emailBodyText = `親愛的 ${name} 您好：\n\n我們已收到您的 NMR 送測委託單，詳細內容如下：\n\n👤 委託人: ${name}\n🏢 單位: ${unit}\n📞 電話: ${phone}\n📧 Email: ${email}\n\n🧪 樣品數量: ${samples.length} 件\n📌 樣品明細:\n${sampleText}\n\n📝 備註:\n${note || '無'}\n\n我們會盡快為您安排處理。如有任何特殊需求或問題，管理員會透過此 Email 與您聯繫。\n\n感謝您的使用！\n\nNDHU NMR 實驗室團隊 敬上`;
+      const emailBodyText = `親愛的 ${name} 您好：\n\n我們已收到您的 NMR 送測委託單，詳細內容如下：\n\n👤 委託人: ${name}\n🏢 單位: ${unit}\n📞 電話: ${phone}\n📧 Email: ${email}\n\n🧪 樣品數量: ${samples.length} 件\n📌 樣品明細:\n${sampleText}\n\n📝 備註:\n${note || '無'}\n\n我們會盡快為您安排處理。如有任何特殊需求或問題，管理員會透過此 Email 與您聯繫。\n\n感謝您的使用！\n\nNDHU NMR Operator`;
 
       await transporter.sendMail({
         from: `"NDHU NMR 預約系統" <${emailUser}>`,
