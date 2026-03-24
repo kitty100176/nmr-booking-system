@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Calendar, Clock, User, LogOut, Settings, X, Check, AlertCircle, UserCheck, UserX, UserPlus, Trash2, Edit, DollarSign, FileWarning, Save, ChevronDown, ChevronRight, Zap, ClipboardList, Bell, ArrowLeft } from 'lucide-react';import { supabase } from '../lib/supabase';
-
+import { Calendar, Clock, User, LogOut, Settings, X, Check, AlertCircle, UserCheck, UserX, UserPlus, Trash2, Edit, DollarSign, FileWarning, Save, ChevronDown, ChevronRight, Zap, ClipboardList, Bell, ArrowLeft, GripVertical } from 'lucide-react';
 // 輔助函式：取得今天的日期字串 (YYYY-MM-DD)
 const getTodayString = () => {
   const today = new Date();
@@ -97,10 +96,52 @@ export default function NMRBookingSystem() {
 
   const INSTRUMENTS = ['60', '500'];
 
-const loadServiceItems = async () => {
-    const { data } = await supabase.from('service_items').select('*').order('name');
+// === 服務項目拖曳與編輯邏輯 ===
+  const [draggedItemIndex, setDraggedItemIndex] = useState(null);
+
+  const loadServiceItems = async () => {
+    // 改為依照 sort_order 排序，如果順序一樣再依 id 排
+    const { data } = await supabase.from('service_items').select('*').order('sort_order', { ascending: true }).order('id');
     if (data) setServiceItems(data);
   };
+
+  const handleDragStart = (index) => {
+    setDraggedItemIndex(index);
+  };
+
+  const handleDragEnter = (index) => {
+    if (draggedItemIndex === null || draggedItemIndex === index) return;
+    const newItems = [...serviceItems];
+    const draggedItem = newItems[draggedItemIndex];
+    newItems.splice(draggedItemIndex, 1);
+    newItems.splice(index, 0, draggedItem);
+    setDraggedItemIndex(index);
+    setServiceItems(newItems); // 畫面即時重新排序
+  };
+
+  const handleDragEnd = async () => {
+    setDraggedItemIndex(null);
+    try {
+      // 拖曳放開後，將新的排序順序批次存入 Supabase
+      const updates = serviceItems.map((item, index) => ({
+        id: item.id,
+        name: item.name,
+        default_price: item.default_price,
+        sort_order: index
+      }));
+      const { error } = await supabase.from('service_items').upsert(updates);
+      if (error) throw error;
+    } catch (e) {
+      console.error("排序儲存失敗", e);
+    }
+  };
+
+  const handleUpdateServiceName = async (id, newName) => {
+    if (!newName || newName.trim() === '') return;
+    await supabase.from('service_items').update({ name: newName.trim() }).eq('id', id);
+    loadServiceItems();
+  };
+  // ==========================
 
   const loadExternalRequests = async () => {
     const { data } = await supabase.from('external_requests').select('*').order('created_at', { ascending: false });
@@ -1825,7 +1866,7 @@ if (!isLoggedIn) {
           </div>
         </div>
         
-<div className="max-w-7xl mx-auto p-4">
+        <div className="max-w-7xl mx-auto p-4">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {externalRequests.map(req => {
               const sampleCount = req.samples?.length || 0;
@@ -1902,7 +1943,8 @@ if (!isLoggedIn) {
                       <p className="text-sm mb-1"><span className="text-gray-500">姓名:</span> {selectedRequest.name}</p>
                       <p className="text-sm mb-1"><span className="text-gray-500">單位:</span> {selectedRequest.unit}</p>
                       <p className="text-sm mb-1"><span className="text-gray-500">電話:</span> {selectedRequest.phone}</p>
-                      <p className="text-sm mb-1"><span className="text-gray-500">Email:</span> {selectedRequest.email}</p><div className="mt-3 pt-3 border-t">
+                      <p className="text-sm mb-1"><span className="text-gray-500">Email:</span> {selectedRequest.email}</p>
+                      <div className="mt-3 pt-3 border-t">
                         <span className="text-gray-500 text-sm block mb-1">備註:</span>
                         <p className="text-sm whitespace-pre-wrap bg-white p-2 rounded border">{selectedRequest.note || '無'}</p>
                       </div>
@@ -2032,25 +2074,44 @@ if (!isLoggedIn) {
               </div>
               
               <ul className="space-y-2 mb-6 max-h-[40vh] overflow-y-auto pr-2">
-                {serviceItems.map(item => (
-                  <li key={item.id} className="flex justify-between items-center bg-gray-50 px-3 py-2 rounded-lg border gap-2">
-                    <span className="text-sm font-medium flex-1">{item.name}</span>
-                    <div className="flex items-center gap-1 bg-white border rounded px-2 py-1">
+                {serviceItems.map((item, index) => (
+                  <li 
+                    key={item.id} 
+                    draggable
+                    onDragStart={() => handleDragStart(index)}
+                    onDragEnter={() => handleDragEnter(index)}
+                    onDragEnd={handleDragEnd}
+                    onDragOver={(e) => e.preventDefault()}
+                    className={`flex justify-between items-center bg-gray-50 px-3 py-2 rounded-lg border gap-2 cursor-move ${draggedItemIndex === index ? 'opacity-50 border-indigo-300 border-dashed' : 'hover:bg-gray-100 transition-colors'}`}
+                  >
+                    <GripVertical className="w-4 h-4 text-gray-400 flex-shrink-0 cursor-grab" title="按住拖曳排序" />
+                    
+                    <input 
+                      type="text"
+                      defaultValue={item.name}
+                      onBlur={(e) => handleUpdateServiceName(item.id, e.target.value)}
+                      className="text-sm font-medium flex-1 bg-transparent border-b border-transparent hover:border-gray-300 focus:border-indigo-500 focus:bg-white outline-none px-1 py-0.5 transition-colors"
+                      title="點擊修改名稱，移開滑鼠自動儲存"
+                    />
+                    
+                    <div className="flex items-center gap-1 bg-white border rounded px-2 py-1 flex-shrink-0">
                       <span className="text-xs text-gray-500">$</span>
                       <input 
                         type="number" 
                         defaultValue={item.default_price || 100}
                         onBlur={(e) => handleUpdateServicePrice(item.id, Number(e.target.value))}
                         className="w-14 text-sm outline-none text-right font-semibold text-indigo-700"
-                        title="點擊修改，移開滑鼠自動儲存"
+                        title="點擊修改金額，移開滑鼠自動儲存"
                       />
                     </div>
+                    
                     <button 
                       onClick={async () => {
                         await supabase.from('service_items').delete().eq('id', item.id);
                         loadServiceItems();
                       }}
-                      className="text-red-400 hover:text-red-600 ml-2 p-1"
+                      className="text-red-400 hover:text-red-600 p-1 flex-shrink-0"
+                      title="刪除項目"
                     ><Trash2 className="w-4 h-4" /></button>
                   </li>
                 ))}
@@ -2078,12 +2139,16 @@ if (!isLoggedIn) {
                   <button 
                     onClick={async () => {
                       if (!newServiceItemName) return;
-                      await supabase.from('service_items').insert([{ name: newServiceItemName, default_price: newServiceItemPrice }]);
+                      await supabase.from('service_items').insert([{ 
+                        name: newServiceItemName, 
+                        default_price: newServiceItemPrice,
+                        sort_order: serviceItems.length // 新增時自動排在最後面
+                      }]);
                       setNewServiceItemName('');
                       setNewServiceItemPrice(100);
                       loadServiceItems();
                     }}
-                    className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm font-medium shadow-sm"
+                    className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm font-medium shadow-sm flex-shrink-0"
                   >新增</button>
                 </div>
               </div>
