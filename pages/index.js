@@ -171,7 +171,8 @@ const handleExternalSubmit = async () => {
 
       // === 新增這段：觸發背景發送 LINE 與 Email ===
       try {
-        await fetch('/api/notify', {
+        console.log("正在呼叫通知 API...");
+        const response = await fetch('/api/notify', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -181,8 +182,16 @@ const handleExternalSubmit = async () => {
             note: externalForm.note
           })
         });
+
+        if (!response.ok) {
+          // 如果伺服器報錯 (例如 404 或 500)，直接彈出視窗告訴我們！
+          const errorText = await response.text();
+          alert(`通知系統異常 (錯誤碼: ${response.status})\n請截圖給工程師：\n${errorText.substring(0, 100)}`);
+        } else {
+          console.log("LINE 與 Email 通知發送成功！");
+        }
       } catch (notifyError) {
-        console.error('通知發送異常', notifyError);
+        alert('無法連接到通知伺服器，請檢查網路狀態。');
       }
       // ============================================
 
