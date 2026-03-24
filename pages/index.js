@@ -1277,6 +1277,9 @@ if (!isLoggedIn) {
                     </div>
                     <button onClick={handleExternalSubmit} className="w-full bg-green-600 text-white py-3 rounded-lg hover:bg-green-700 transition font-medium mt-2 shadow-sm hover:shadow-md">送出申請 Submit</button>
                   </div>
+                )}
+              </div>
+            </div>
 
             {/* ====== 右半邊：動態切換規則與背景色 ====== */}
             <div className={`md:w-1/2 text-white p-8 flex flex-col max-h-screen transition-colors duration-500 ${loginTab === 'internal' ? 'bg-indigo-600' : 'bg-teal-600'}`}>
