@@ -169,12 +169,23 @@ const handleExternalSubmit = async () => {
         samples: [{ solvent: '', code: '', service_item: '' }] 
       });
       await loadExternalRequests();
-      
-    } catch (error) {
-      console.error(error);
-      alert('送出失敗，請稍後再試');
-    }
-  };
+
+      // === 新增這段：觸發背景發送 LINE 與 Email ===
+      try {
+        await fetch('/api/notify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: externalForm.name,
+            email: externalForm.email,
+            samples: externalForm.samples,
+            note: externalForm.note
+          })
+        });
+      } catch (notifyError) {
+        console.error('通知發送異常', notifyError);
+      }
+      // ============================================
 
   const handleDeleteRequest = async (id, name, e) => {
     e.stopPropagation(); // 阻止事件冒泡，避免點擊刪除按鈕時不小心打開詳細資料 Modal
