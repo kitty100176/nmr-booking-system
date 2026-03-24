@@ -68,8 +68,20 @@ export default function NMRBookingSystem() {
   };
 
   const addSample = () => {
-    setExternalForm({ ...externalForm, samples: [...externalForm.samples, { solvent: '', code: '', service_item: '' }] });
+    // 取得目前最後一個樣品的資料
+    const lastSample = externalForm.samples[externalForm.samples.length - 1];
+    setExternalForm({ 
+      ...externalForm, 
+      samples: [
+        ...externalForm.samples, 
+        // 幫忙填入上一個的 Solvent 和 服務項目，但把「編碼」清空讓使用者重填
+        { solvent: lastSample?.solvent || '', code: '', service_item: lastSample?.service_item || '' }
+      ] 
+    });
   };
+
+  // === 新增：給編輯服務項目 Modal 用的預設金額 State ===
+  const [newServiceItemPrice, setNewServiceItemPrice] = useState(100);
 
   const removeSample = (index) => {
     const newSamples = externalForm.samples.filter((_, i) => i !== index);
@@ -99,6 +111,33 @@ const loadServiceItems = async () => {
     loadServiceItems();
     loadExternalRequests(); // 系統載入時預先讀取，為了算紅點數量
   }, []);
+
+const handleSaveModal = async () => {
+    if (!selectedRequest) return;
+    // 計算總金額 (時數 * 費率)
+    const total = (selectedRequest.billing_details || []).reduce((sum, item) => sum + (Number(item.hours || 0) * Number(item.rate || 0)), 0);
+
+    try {
+      const updates = {
+        status: selectedRequest.status,
+        admin_note: selectedRequest.admin_note,
+        billing_details: selectedRequest.billing_details,
+        total_cost: total
+      };
+      const { error } = await supabase.from('external_requests').update(updates).eq('id', selectedRequest.id);
+      if (error) throw error;
+      alert('儲存成功！');
+      await loadExternalRequests();
+      setSelectedRequest(null);
+    } catch (error) {
+      alert('儲存失敗');
+    }
+  };
+
+  const handleUpdateServicePrice = async (id, newPrice) => {
+    await supabase.from('service_items').update({ default_price: newPrice }).eq('id', id);
+    loadServiceItems();
+  };
 
 const handleExternalSubmit = async () => {
     if (!externalForm.name || !externalForm.email) {
@@ -1760,14 +1799,34 @@ if (!isLoggedIn) {
           </div>
         </div>
         
-        <div className="max-w-7xl mx-auto p-4">
+<div className="max-w-7xl mx-auto p-4">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {externalRequests.map(req => {
               const sampleCount = req.samples?.length || 0;
               const firstSample = req.samples?.[0] || {};
               return (
-                <div key={req.id} onClick={() => setSelectedRequest(req)} className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm hover:shadow-md cursor-pointer transition flex flex-col h-full relative overflow-hidden">
-                  {/* 側邊裝飾條 */}
+                <div 
+                  key={req.id} 
+                  onClick={() => {
+                    // === 動態產生計費項目邏輯 ===
+                    let billing = req.billing_details;
+                    // 如果這張單子還沒有計費明細，就根據樣品種類自動產生
+                    if (!billing || billing.length === 0) {
+                      // 抓出所有不重複的服務項目 (例如 [1H NMR, 13C NMR])
+                      const uniqueServices = [...new Set((req.samples || []).map(s => s.service_item))].filter(Boolean);
+                      billing = uniqueServices.map(serviceName => {
+                        const serviceObj = serviceItems.find(item => item.name === serviceName);
+                        return {
+                          service_item: serviceName,
+                          hours: '', // 預設空白，可填小數點
+                          rate: serviceObj ? serviceObj.default_price : 100 // 帶入系統設定的預設金額
+                        };
+                      });
+                    }
+                    setSelectedRequest({ ...req, billing_details: billing });
+                  }} 
+                  className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm hover:shadow-md cursor-pointer transition flex flex-col h-full relative overflow-hidden"
+                >
                   <div className={`absolute left-0 top-0 bottom-0 w-1 ${req.status === '未處理' ? 'bg-red-400' : req.status === '已完成' ? 'bg-green-400' : 'bg-gray-300'}`}></div>
                   
                   <div className="flex justify-between items-start mb-3 pl-2">
@@ -1785,8 +1844,8 @@ if (!isLoggedIn) {
                     )}
                   </div>
                   <div className="border-t pt-3 mt-auto flex justify-between text-sm pl-2">
-                    <span className="text-gray-500">耗時: {req.time_spent} hr</span>
-                    <span className="font-bold text-indigo-600">${req.total_cost}</span>
+                    <span className="text-gray-500">總金額:</span>
+                    <span className="font-bold text-indigo-600">${req.total_cost || 0}</span>
                   </div>
                 </div>
               );
@@ -1800,7 +1859,7 @@ if (!isLoggedIn) {
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
             <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full p-6 max-h-[90vh] overflow-y-auto">
               <div className="flex justify-between items-center mb-6 border-b pb-4">
-                <h2 className="text-2xl font-bold text-gray-800">委託單詳細資訊</h2>
+                <h2 className="text-2xl font-bold text-gray-800">委託單處理作業</h2>
                 <button onClick={() => setSelectedRequest(null)} className="text-gray-500 hover:text-gray-700"><X className="w-6 h-6" /></button>
               </div>
 
@@ -1818,12 +1877,11 @@ if (!isLoggedIn) {
                     </div>
                   </div>
 
-                  {/* 多樣品清單顯示 */}
                   <div className="bg-indigo-50/50 p-4 rounded-lg border border-indigo-100">
                     <h3 className="font-bold text-indigo-800 border-b border-indigo-200 pb-2 mb-3">
                       樣品清單 (共 {selectedRequest.samples?.length || 0} 件)
                     </h3>
-                    <div className="space-y-2 max-h-48 overflow-y-auto pr-2">
+                    <div className="space-y-2 max-h-[28vh] overflow-y-auto pr-2">
                       {selectedRequest.samples?.map((s, idx) => (
                         <div key={idx} className="bg-white p-3 rounded shadow-sm border border-gray-100 text-sm">
                           <div className="flex justify-between items-center mb-1">
@@ -1846,7 +1904,7 @@ if (!isLoggedIn) {
                     <label className="block text-sm font-medium text-gray-700 mb-1">狀態追蹤</label>
                     <select 
                       value={selectedRequest.status} 
-                      onChange={(e) => handleUpdateRequest(selectedRequest.id, { status: e.target.value })}
+                      onChange={(e) => setSelectedRequest({ ...selectedRequest, status: e.target.value })}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
                     >
                       <option value="未處理">未處理</option>
@@ -1860,48 +1918,74 @@ if (!isLoggedIn) {
                     <label className="block text-sm font-medium text-gray-700 mb-1">管理員備註 (給Operator用)</label>
                     <textarea 
                       value={selectedRequest.admin_note || ''} 
-                      onChange={(e) => handleUpdateRequest(selectedRequest.id, { admin_note: e.target.value })}
-                      rows={4}
+                      onChange={(e) => setSelectedRequest({ ...selectedRequest, admin_note: e.target.value })}
+                      rows={3}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
                       placeholder="紀錄處理進度或測量結果..."
                     />
                   </div>
                   
                   <div className="bg-gray-50 p-4 rounded-lg border">
-                    <h3 className="font-bold text-gray-700 mb-3 border-b pb-2">費用計算</h3>
-                    <div className="grid grid-cols-2 gap-3 mb-4">
-                      <div>
-                        <label className="block text-xs font-medium text-gray-700 mb-1">花費時間 (hr)</label>
-                        <input 
-                          type="number" 
-                          value={selectedRequest.time_spent} 
-                          onChange={(e) => {
-                            const time = Number(e.target.value);
-                            handleUpdateRequest(selectedRequest.id, { time_spent: time, total_cost: time * selectedRequest.hourly_rate });
-                          }}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-gray-700 mb-1">每小時費率</label>
-                        <input 
-                          type="number" 
-                          value={selectedRequest.hourly_rate} 
-                          onChange={(e) => {
-                            const rate = Number(e.target.value);
-                            handleUpdateRequest(selectedRequest.id, { hourly_rate: rate, total_cost: selectedRequest.time_spent * rate });
-                          }}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500"
-                        />
-                      </div>
+                    <h3 className="font-bold text-gray-700 mb-3 border-b pb-2 flex justify-between">
+                      費用計算 
+                      <span className="text-xs text-gray-400 font-normal mt-1">依服務種類分類</span>
+                    </h3>
+                    <div className="space-y-3 mb-4 max-h-[20vh] overflow-y-auto pr-2">
+                      {(selectedRequest.billing_details || []).map((bill, index) => (
+                        <div key={index} className="grid grid-cols-12 gap-2 items-center bg-white p-2 rounded border shadow-sm">
+                          <div className="col-span-5 text-sm font-bold text-indigo-700 truncate" title={bill.service_item}>
+                            {bill.service_item}
+                          </div>
+                          <div className="col-span-3">
+                            <input 
+                              type="number" 
+                              step="0.1" 
+                              placeholder="時數"
+                              value={bill.hours} 
+                              onChange={(e) => {
+                                const newBilling = [...selectedRequest.billing_details];
+                                newBilling[index].hours = e.target.value;
+                                setSelectedRequest({...selectedRequest, billing_details: newBilling});
+                              }}
+                              className="w-full px-2 py-1 border rounded text-sm focus:ring-2 focus:ring-indigo-500"
+                            />
+                          </div>
+                          <div className="col-span-1 text-center text-gray-400 text-xs">x</div>
+                          <div className="col-span-3">
+                            <input 
+                              type="number" 
+                              placeholder="$ 費率"
+                              value={bill.rate} 
+                              onChange={(e) => {
+                                const newBilling = [...selectedRequest.billing_details];
+                                newBilling[index].rate = e.target.value;
+                                setSelectedRequest({...selectedRequest, billing_details: newBilling});
+                              }}
+                              className="w-full px-2 py-1 border rounded text-sm focus:ring-2 focus:ring-indigo-500"
+                            />
+                          </div>
+                        </div>
+                      ))}
+                      {(!selectedRequest.billing_details || selectedRequest.billing_details.length === 0) && (
+                        <p className="text-sm text-gray-500 text-center py-2">無計算項目</p>
+                      )}
                     </div>
                     <div className="bg-indigo-600 p-3 rounded-lg flex justify-between items-center text-white shadow-inner">
                       <span className="font-bold opacity-90">總花費金額</span>
-                      <span className="font-bold text-2xl">${selectedRequest.total_cost}</span>
+                      <span className="font-bold text-2xl">
+                        ${(selectedRequest.billing_details || []).reduce((sum, item) => sum + (Number(item.hours || 0) * Number(item.rate || 0)), 0)}
+                      </span>
                     </div>
                   </div>
                 </div>
               </div>
+              
+              {/* 統一儲存按鈕 */}
+              <div className="flex gap-3 border-t pt-4">
+                <button onClick={() => setSelectedRequest(null)} className="flex-1 px-4 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition font-medium">取消</button>
+                <button onClick={handleSaveModal} className="flex-1 px-4 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition font-medium shadow-md">儲存變更</button>
+              </div>
+
             </div>
           </div>
         )}
@@ -1909,42 +1993,67 @@ if (!isLoggedIn) {
         {/* 編輯服務項目 Modal */}
         {showServiceItemModal && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-            <div className="bg-white rounded-xl shadow-2xl max-w-sm w-full p-6">
+            <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
               <div className="flex justify-between items-center mb-4 border-b pb-2">
-                <h2 className="text-xl font-bold text-gray-800">編輯服務項目</h2>
+                <h2 className="text-xl font-bold text-gray-800">編輯服務項目與預設金額</h2>
                 <button onClick={() => setShowServiceItemModal(false)} className="text-gray-500 hover:text-gray-700"><X className="w-5 h-5" /></button>
               </div>
-              <ul className="space-y-2 mb-4 max-h-48 overflow-y-auto">
+              
+              <ul className="space-y-2 mb-6 max-h-[40vh] overflow-y-auto pr-2">
                 {serviceItems.map(item => (
-                  <li key={item.id} className="flex justify-between items-center bg-gray-50 px-3 py-2 rounded border">
-                    <span className="text-sm">{item.name}</span>
+                  <li key={item.id} className="flex justify-between items-center bg-gray-50 px-3 py-2 rounded-lg border gap-2">
+                    <span className="text-sm font-medium flex-1">{item.name}</span>
+                    <div className="flex items-center gap-1 bg-white border rounded px-2 py-1">
+                      <span className="text-xs text-gray-500">$</span>
+                      <input 
+                        type="number" 
+                        defaultValue={item.default_price || 100}
+                        onBlur={(e) => handleUpdateServicePrice(item.id, Number(e.target.value))}
+                        className="w-14 text-sm outline-none text-right font-semibold text-indigo-700"
+                        title="點擊修改，移開滑鼠自動儲存"
+                      />
+                    </div>
                     <button 
                       onClick={async () => {
                         await supabase.from('service_items').delete().eq('id', item.id);
                         loadServiceItems();
                       }}
-                      className="text-red-500 hover:text-red-700"
+                      className="text-red-400 hover:text-red-600 ml-2 p-1"
                     ><Trash2 className="w-4 h-4" /></button>
                   </li>
                 ))}
               </ul>
-              <div className="flex gap-2">
-                <input 
-                  type="text" 
-                  value={newServiceItemName} 
-                  onChange={(e) => setNewServiceItemName(e.target.value)} 
-                  placeholder="新增項目..." 
-                  className="flex-1 px-3 py-2 border rounded-lg text-sm"
-                />
-                <button 
-                  onClick={async () => {
-                    if (!newServiceItemName) return;
-                    await supabase.from('service_items').insert([{ name: newServiceItemName }]);
-                    setNewServiceItemName('');
-                    loadServiceItems();
-                  }}
-                  className="px-3 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm"
-                >新增</button>
+              
+              <div className="bg-indigo-50 p-4 rounded-lg border border-indigo-100">
+                <label className="block text-xs font-bold text-indigo-800 mb-2">新增服務項目</label>
+                <div className="flex gap-2">
+                  <input 
+                    type="text" 
+                    value={newServiceItemName} 
+                    onChange={(e) => setNewServiceItemName(e.target.value)} 
+                    placeholder="項目名稱..." 
+                    className="flex-1 px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-indigo-500"
+                  />
+                  <div className="flex items-center gap-1 bg-white border rounded-lg px-2">
+                    <span className="text-sm text-gray-500">$</span>
+                    <input 
+                      type="number" 
+                      value={newServiceItemPrice} 
+                      onChange={(e) => setNewServiceItemPrice(Number(e.target.value))} 
+                      className="w-16 py-2 text-sm outline-none"
+                    />
+                  </div>
+                  <button 
+                    onClick={async () => {
+                      if (!newServiceItemName) return;
+                      await supabase.from('service_items').insert([{ name: newServiceItemName, default_price: newServiceItemPrice }]);
+                      setNewServiceItemName('');
+                      setNewServiceItemPrice(100);
+                      loadServiceItems();
+                    }}
+                    className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm font-medium shadow-sm"
+                  >新增</button>
+                </div>
               </div>
             </div>
           </div>
