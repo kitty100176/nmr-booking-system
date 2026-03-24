@@ -1223,11 +1223,13 @@ if (!isLoggedIn) {
                   </div>
                 ) : (
                   /* --- 狀態 2：送測服務表單 --- */
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-4 pb-4">
+                    <div className="grid grid-cols-2 gap-3">
                       <div><label className="block text-xs font-medium text-gray-700 mb-1">姓名 *</label><input type="text" value={externalForm.name} onChange={(e) => setExternalForm({...externalForm, name: e.target.value})} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm bg-gray-50 focus:bg-white transition-colors" placeholder="請輸入姓名" /></div>
                       <div><label className="block text-xs font-medium text-gray-700 mb-1">Email *</label><input type="email" value={externalForm.email} onChange={(e) => setExternalForm({...externalForm, email: e.target.value})} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm bg-gray-50 focus:bg-white transition-colors" placeholder="聯絡信箱" /></div>
                     </div>
-                  <div className="grid grid-cols-2 gap-3">
+
+                    <div className="grid grid-cols-2 gap-3">
                       <div><label className="block text-xs font-medium text-gray-700 mb-1">單位/實驗室 *</label><input type="text" value={externalForm.unit} onChange={(e) => setExternalForm({...externalForm, unit: e.target.value})} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm bg-gray-50 focus:bg-white transition-colors" placeholder="例如: 化學系 王大明Lab" /></div>
                       <div><label className="block text-xs font-medium text-gray-700 mb-1">聯絡電話 *</label><input type="text" value={externalForm.phone} onChange={(e) => setExternalForm({...externalForm, phone: e.target.value})} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm bg-gray-50 focus:bg-white transition-colors" placeholder="手機或分機" /></div>
                     </div>
@@ -1275,9 +1277,6 @@ if (!isLoggedIn) {
                     </div>
                     <button onClick={handleExternalSubmit} className="w-full bg-green-600 text-white py-3 rounded-lg hover:bg-green-700 transition font-medium mt-2 shadow-sm hover:shadow-md">送出申請 Submit</button>
                   </div>
-                )}
-              </div>
-            </div>
 
             {/* ====== 右半邊：動態切換規則與背景色 ====== */}
             <div className={`md:w-1/2 text-white p-8 flex flex-col max-h-screen transition-colors duration-500 ${loginTab === 'internal' ? 'bg-indigo-600' : 'bg-teal-600'}`}>
