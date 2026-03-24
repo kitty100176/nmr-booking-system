@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Calendar, Clock, User, LogOut, Settings, X, Check, AlertCircle, UserCheck, UserX, UserPlus, Trash2, Edit, DollarSign, FileWarning, Save, ChevronDown, ChevronRight, Zap, ClipboardList, Bell, ArrowLeft, GripVertical } from 'lucide-react';
-// 輔助函式：取得今天的日期字串 (YYYY-MM-DD)
-const getTodayString = () => {
-  const today = new Date();
+import { supabase } from '../lib/supabase';
+
+// 輔助函式：取得今天的日期字串 (YYYY-MM-DD)  
+
+const today = new Date();
   return today.toISOString().split('T')[0];
 };
 
