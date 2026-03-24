@@ -160,7 +160,6 @@ const handleExternalSubmit = async () => {
         note: externalForm.note,
         samples: externalForm.samples
       }]);
-      
       if (error) throw error;
       
       alert('表單送出成功！我們會盡快與您聯絡。');
@@ -186,6 +185,12 @@ const handleExternalSubmit = async () => {
         console.error('通知發送異常', notifyError);
       }
       // ============================================
+
+    } catch (error) {
+      console.error(error);
+      alert('送出失敗，請稍後再試');
+    }
+  };
 
   const handleDeleteRequest = async (id, name, e) => {
     e.stopPropagation(); // 阻止事件冒泡，避免點擊刪除按鈕時不小心打開詳細資料 Modal
