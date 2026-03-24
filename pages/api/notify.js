@@ -3,13 +3,12 @@ import nodemailer from 'nodemailer';
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
 
-  // 接收前端傳來的所有資料 (新增了 phone, unit)
   const { name, email, phone, unit, samples, note } = req.body;
   console.log("1. 收到表單資料，準備發送通知...");
 
   try {
-    // 整理樣品清單文字 (LINE 跟 Email 共用)
-    const sampleText = samples.map((s, i) => `[${i+1}] 編碼: ${s.code} / 項目: ${s.service_item}`).join('\n');
+    // === 修改這裡：在樣品明細中加入 Solvent 資訊 ===
+    const sampleText = samples.map((s, i) => `[${i+1}] 編碼: ${s.code} / Solvent: ${s.solvent || '未填'} / 項目: ${s.service_item}`).join('\n');
     
     // === 1. 發送 LINE 廣播通知 ===
     const lineToken = process.env.LINE_CHANNEL_ACCESS_TOKEN;
@@ -40,7 +39,6 @@ export default async function handler(req, res) {
         auth: { user: emailUser, pass: emailPass }
       });
 
-      // Email 的詳細內容範本
       const emailBodyText = `親愛的 ${name} 您好：\n\n我們已收到您的 NMR 送測委託單，詳細內容如下：\n\n👤 委託人: ${name}\n🏢 單位: ${unit}\n📞 電話: ${phone}\n📧 Email: ${email}\n\n🧪 樣品數量: ${samples.length} 件\n📌 樣品明細:\n${sampleText}\n\n📝 備註:\n${note || '無'}\n\n我們會盡快為您安排處理。如有任何特殊需求或問題，管理員會透過此 Email 與您聯繫。\n\n感謝您的使用！\n\nNDHU NMR 實驗室團隊 敬上`;
 
       await transporter.sendMail({
