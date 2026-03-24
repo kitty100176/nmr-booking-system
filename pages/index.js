@@ -3,8 +3,8 @@ import { Calendar, Clock, User, LogOut, Settings, X, Check, AlertCircle, UserChe
 import { supabase } from '../lib/supabase';
 
 // 輔助函式：取得今天的日期字串 (YYYY-MM-DD)  
-
-const today = new Date();
+const getTodayString = () => {
+  const today = new Date();
   return today.toISOString().split('T')[0];
 };
 
