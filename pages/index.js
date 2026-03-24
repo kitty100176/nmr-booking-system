@@ -1272,7 +1272,7 @@ if (!isLoggedIn) {
                         onChange={(e) => setExternalForm({...externalForm, note: e.target.value})} 
                         rows={4} 
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm bg-gray-50 focus:bg-white transition-colors" 
-                        placeholder="其他需要特別說明的需求..." 
+                        placeholder="其他需要特別說明的需求...\n※ 若需調整實驗參數或附上參考文獻，請將相關檔案寄至：ndhu.nmr@gmail.com"} 
                       />
                     </div>
                     <button onClick={handleExternalSubmit} className="w-full bg-green-600 text-white py-3 rounded-lg hover:bg-green-700 transition font-medium mt-2 shadow-sm hover:shadow-md">送出申請 Submit</button>
