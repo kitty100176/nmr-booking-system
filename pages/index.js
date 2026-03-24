@@ -57,7 +57,7 @@ export default function NMRBookingSystem() {
 // === 送測服務 CRM State ===
   const [loginTab, setLoginTab] = useState('internal'); // 'internal' | 'external'
   const [externalForm, setExternalForm] = useState({ 
-    name: '', email: '', note: '', 
+    name: '', email: '', phone: '', unit: '', note: '', 
     samples: [{ solvent: '', code: '', service_item: '' }] 
   });
 
@@ -140,12 +140,12 @@ const handleSaveModal = async () => {
   };
 
 const handleExternalSubmit = async () => {
-    if (!externalForm.name || !externalForm.email) {
-      alert('請填寫必填欄位 (姓名、Email)');
+    // 1. 檢查必填加入 phone 和 unit
+    if (!externalForm.name || !externalForm.email || !externalForm.phone || !externalForm.unit) {
+      alert('請填寫必填欄位 (姓名、單位、電話、Email)');
       return;
     }
     
-    // 檢查是不是每個樣品都有填寫編碼跟服務項目
     const hasInvalidSample = externalForm.samples.some(s => !s.code || !s.service_item);
     if (hasInvalidSample) {
       alert('請確保「所有樣品」都已填寫編碼與服務項目');
@@ -153,47 +153,43 @@ const handleExternalSubmit = async () => {
     }
 
     try {
-      // 這裡送出給 Supabase
+      // 2. 存入 Supabase 加入 phone 和 unit
       const { error } = await supabase.from('external_requests').insert([{ 
         name: externalForm.name,
         email: externalForm.email,
+        phone: externalForm.phone,
+        unit: externalForm.unit,
         note: externalForm.note,
         samples: externalForm.samples
       }]);
       if (error) throw error;
       
       alert('表單送出成功！我們會盡快與您聯絡。');
+      
+      // 3. 清空表單加入 phone 和 unit
       setExternalForm({ 
-        name: '', email: '', note: '', 
+        name: '', email: '', phone: '', unit: '', note: '', 
         samples: [{ solvent: '', code: '', service_item: '' }] 
       });
       await loadExternalRequests();
 
-      // === 新增這段：觸發背景發送 LINE 與 Email ===
+      // 4. 通知 API 加入 phone 和 unit
       try {
-        console.log("正在呼叫通知 API...");
-        const response = await fetch('/api/notify', {
+        await fetch('/api/notify', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             name: externalForm.name,
             email: externalForm.email,
+            phone: externalForm.phone,
+            unit: externalForm.unit,
             samples: externalForm.samples,
             note: externalForm.note
           })
         });
-
-        if (!response.ok) {
-          // 如果伺服器報錯 (例如 404 或 500)，直接彈出視窗告訴我們！
-          const errorText = await response.text();
-          alert(`通知系統異常 (錯誤碼: ${response.status})\n請截圖給工程師：\n${errorText.substring(0, 100)}`);
-        } else {
-          console.log("LINE 與 Email 通知發送成功！");
-        }
       } catch (notifyError) {
-        alert('無法連接到通知伺服器，請檢查網路狀態。');
+        console.error('通知發送異常', notifyError);
       }
-      // ============================================
 
     } catch (error) {
       console.error(error);
@@ -1227,10 +1223,13 @@ if (!isLoggedIn) {
                   </div>
                 ) : (
                   /* --- 狀態 2：送測服務表單 --- */
-                  <div className="space-y-4 pb-4">
-                    <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-2 gap-3">
                       <div><label className="block text-xs font-medium text-gray-700 mb-1">姓名 *</label><input type="text" value={externalForm.name} onChange={(e) => setExternalForm({...externalForm, name: e.target.value})} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm bg-gray-50 focus:bg-white transition-colors" placeholder="請輸入姓名" /></div>
                       <div><label className="block text-xs font-medium text-gray-700 mb-1">Email *</label><input type="email" value={externalForm.email} onChange={(e) => setExternalForm({...externalForm, email: e.target.value})} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm bg-gray-50 focus:bg-white transition-colors" placeholder="聯絡信箱" /></div>
+                    </div>
+                  <div className="grid grid-cols-2 gap-3">
+                      <div><label className="block text-xs font-medium text-gray-700 mb-1">單位/實驗室 *</label><input type="text" value={externalForm.unit} onChange={(e) => setExternalForm({...externalForm, unit: e.target.value})} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm bg-gray-50 focus:bg-white transition-colors" placeholder="例如: 化學系 王大明Lab" /></div>
+                      <div><label className="block text-xs font-medium text-gray-700 mb-1">聯絡電話 *</label><input type="text" value={externalForm.phone} onChange={(e) => setExternalForm({...externalForm, phone: e.target.value})} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm bg-gray-50 focus:bg-white transition-colors" placeholder="手機或分機" /></div>
                     </div>
 
                     {/* === 動態樣品清單區塊 === */}
@@ -1899,8 +1898,9 @@ if (!isLoggedIn) {
                     <div className="bg-gray-50 p-4 rounded-lg border">
                       <h3 className="font-bold text-gray-700 border-b pb-2 mb-3">客戶基本資料</h3>
                       <p className="text-sm mb-1"><span className="text-gray-500">姓名:</span> {selectedRequest.name}</p>
-                      <p className="text-sm mb-1"><span className="text-gray-500">Email:</span> {selectedRequest.email}</p>
-                      <div className="mt-3 pt-3 border-t">
+                      <p className="text-sm mb-1"><span className="text-gray-500">單位:</span> {selectedRequest.unit}</p>
+                      <p className="text-sm mb-1"><span className="text-gray-500">電話:</span> {selectedRequest.phone}</p>
+                      <p className="text-sm mb-1"><span className="text-gray-500">Email:</span> {selectedRequest.email}</p><div className="mt-3 pt-3 border-t">
                         <span className="text-gray-500 text-sm block mb-1">備註:</span>
                         <p className="text-sm whitespace-pre-wrap bg-white p-2 rounded border">{selectedRequest.note || '無'}</p>
                       </div>
