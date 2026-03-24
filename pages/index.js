@@ -1857,133 +1857,138 @@ if (!isLoggedIn) {
         {/* 委託單詳細內容 Modal */}
         {selectedRequest && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-            <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full p-6 max-h-[90vh] overflow-y-auto">
-              <div className="flex justify-between items-center mb-6 border-b pb-4">
+            {/* 改用 flex-col 讓內部可以切分頂部、中間滾動區、底部固定區 */}
+            <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full flex flex-col max-h-[90vh]">
+              
+              {/* === 頂部標題區 (固定不動，移除 X 按鈕) === */}
+              <div className="p-6 border-b border-gray-200 flex-shrink-0">
                 <h2 className="text-2xl font-bold text-gray-800">委託單處理作業</h2>
-                <button onClick={() => setSelectedRequest(null)} className="text-gray-500 hover:text-gray-700"><X className="w-6 h-6" /></button>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                
-                {/* 左側：客戶填寫內容 */}
-                <div className="space-y-4">
-                  <div className="bg-gray-50 p-4 rounded-lg border">
-                    <h3 className="font-bold text-gray-700 border-b pb-2 mb-3">客戶基本資料</h3>
-                    <p className="text-sm mb-1"><span className="text-gray-500">姓名:</span> {selectedRequest.name}</p>
-                    <p className="text-sm mb-1"><span className="text-gray-500">Email:</span> {selectedRequest.email}</p>
-                    <div className="mt-3 pt-3 border-t">
-                      <span className="text-gray-500 text-sm block mb-1">備註:</span>
-                      <p className="text-sm whitespace-pre-wrap bg-white p-2 rounded border">{selectedRequest.note || '無'}</p>
-                    </div>
-                  </div>
-
-                  <div className="bg-indigo-50/50 p-4 rounded-lg border border-indigo-100">
-                    <h3 className="font-bold text-indigo-800 border-b border-indigo-200 pb-2 mb-3">
-                      樣品清單 (共 {selectedRequest.samples?.length || 0} 件)
-                    </h3>
-                    <div className="space-y-2 max-h-[28vh] overflow-y-auto pr-2">
-                      {selectedRequest.samples?.map((s, idx) => (
-                        <div key={idx} className="bg-white p-3 rounded shadow-sm border border-gray-100 text-sm">
-                          <div className="flex justify-between items-center mb-1">
-                            <span className="font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded text-xs">#{idx + 1}</span>
-                            <span className="font-semibold text-gray-800">{s.code}</span>
-                          </div>
-                          <div className="flex flex-col text-xs text-gray-600 space-y-1 mt-2">
-                            <p>Solvent: <span className="text-gray-800">{s.solvent || '未填'}</span></p>
-                            <p>服務: <span className="text-indigo-700 font-medium">{s.service_item}</span></p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-
-                {/* 右側：狀態追蹤與計費 */}
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">狀態追蹤</label>
-                    <select 
-                      value={selectedRequest.status} 
-                      onChange={(e) => setSelectedRequest({ ...selectedRequest, status: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-                    >
-                      <option value="未處理">未處理</option>
-                      <option value="已聯絡">已聯絡</option>
-                      <option value="處理中">處理中</option>
-                      <option value="已完成">已完成</option>
-                      <option value="已取消">已取消</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">管理員備註 (給Operator用)</label>
-                    <textarea 
-                      value={selectedRequest.admin_note || ''} 
-                      onChange={(e) => setSelectedRequest({ ...selectedRequest, admin_note: e.target.value })}
-                      rows={3}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-                      placeholder="紀錄處理進度或測量結果..."
-                    />
-                  </div>
+              {/* === 中間內容區 (自動產生捲軸) === */}
+              <div className="p-6 overflow-y-auto flex-1">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   
-                  <div className="bg-gray-50 p-4 rounded-lg border">
-                    <h3 className="font-bold text-gray-700 mb-3 border-b pb-2 flex justify-between">
-                      費用計算 
-                      <span className="text-xs text-gray-400 font-normal mt-1">依服務種類分類</span>
-                    </h3>
-                    <div className="space-y-3 mb-4 max-h-[20vh] overflow-y-auto pr-2">
-                      {(selectedRequest.billing_details || []).map((bill, index) => (
-                        <div key={index} className="grid grid-cols-12 gap-2 items-center bg-white p-2 rounded border shadow-sm">
-                          <div className="col-span-5 text-sm font-bold text-indigo-700 truncate" title={bill.service_item}>
-                            {bill.service_item}
-                          </div>
-                          <div className="col-span-3">
-                            <input 
-                              type="number" 
-                              step="0.1" 
-                              placeholder="時數"
-                              value={bill.hours} 
-                              onChange={(e) => {
-                                const newBilling = [...selectedRequest.billing_details];
-                                newBilling[index].hours = e.target.value;
-                                setSelectedRequest({...selectedRequest, billing_details: newBilling});
-                              }}
-                              className="w-full px-2 py-1 border rounded text-sm focus:ring-2 focus:ring-indigo-500"
-                            />
-                          </div>
-                          <div className="col-span-1 text-center text-gray-400 text-xs">x</div>
-                          <div className="col-span-3">
-                            <input 
-                              type="number" 
-                              placeholder="$ 費率"
-                              value={bill.rate} 
-                              onChange={(e) => {
-                                const newBilling = [...selectedRequest.billing_details];
-                                newBilling[index].rate = e.target.value;
-                                setSelectedRequest({...selectedRequest, billing_details: newBilling});
-                              }}
-                              className="w-full px-2 py-1 border rounded text-sm focus:ring-2 focus:ring-indigo-500"
-                            />
-                          </div>
-                        </div>
-                      ))}
-                      {(!selectedRequest.billing_details || selectedRequest.billing_details.length === 0) && (
-                        <p className="text-sm text-gray-500 text-center py-2">無計算項目</p>
-                      )}
+                  {/* 左側：客戶填寫內容 */}
+                  <div className="space-y-4">
+                    <div className="bg-gray-50 p-4 rounded-lg border">
+                      <h3 className="font-bold text-gray-700 border-b pb-2 mb-3">客戶基本資料</h3>
+                      <p className="text-sm mb-1"><span className="text-gray-500">姓名:</span> {selectedRequest.name}</p>
+                      <p className="text-sm mb-1"><span className="text-gray-500">Email:</span> {selectedRequest.email}</p>
+                      <div className="mt-3 pt-3 border-t">
+                        <span className="text-gray-500 text-sm block mb-1">備註:</span>
+                        <p className="text-sm whitespace-pre-wrap bg-white p-2 rounded border">{selectedRequest.note || '無'}</p>
+                      </div>
                     </div>
-                    <div className="bg-indigo-600 p-3 rounded-lg flex justify-between items-center text-white shadow-inner">
-                      <span className="font-bold opacity-90">總花費金額</span>
-                      <span className="font-bold text-2xl">
-                        ${(selectedRequest.billing_details || []).reduce((sum, item) => sum + (Number(item.hours || 0) * Number(item.rate || 0)), 0)}
-                      </span>
+
+                    <div className="bg-indigo-50/50 p-4 rounded-lg border border-indigo-100">
+                      <h3 className="font-bold text-indigo-800 border-b border-indigo-200 pb-2 mb-3">
+                        樣品清單 (共 {selectedRequest.samples?.length || 0} 件)
+                      </h3>
+                      <div className="space-y-2 max-h-[28vh] overflow-y-auto pr-2">
+                        {selectedRequest.samples?.map((s, idx) => (
+                          <div key={idx} className="bg-white p-3 rounded shadow-sm border border-gray-100 text-sm">
+                            <div className="flex justify-between items-center mb-1">
+                              <span className="font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded text-xs">#{idx + 1}</span>
+                              <span className="font-semibold text-gray-800">{s.code}</span>
+                            </div>
+                            <div className="flex flex-col text-xs text-gray-600 space-y-1 mt-2">
+                              <p>Solvent: <span className="text-gray-800">{s.solvent || '未填'}</span></p>
+                              <p>服務: <span className="text-indigo-700 font-medium">{s.service_item}</span></p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 右側：狀態追蹤與計費 */}
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">狀態追蹤</label>
+                      <select 
+                        value={selectedRequest.status} 
+                        onChange={(e) => setSelectedRequest({ ...selectedRequest, status: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                      >
+                        <option value="未處理">未處理</option>
+                        <option value="已聯絡">已聯絡</option>
+                        <option value="處理中">處理中</option>
+                        <option value="已完成">已完成</option>
+                        <option value="已取消">已取消</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">管理員備註 (給Operator用)</label>
+                      <textarea 
+                        value={selectedRequest.admin_note || ''} 
+                        onChange={(e) => setSelectedRequest({ ...selectedRequest, admin_note: e.target.value })}
+                        rows={3}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                        placeholder="紀錄處理進度或測量結果..."
+                      />
+                    </div>
+                    
+                    <div className="bg-gray-50 p-4 rounded-lg border">
+                      <h3 className="font-bold text-gray-700 mb-3 border-b pb-2 flex justify-between">
+                        費用計算 
+                        <span className="text-xs text-gray-400 font-normal mt-1">依服務種類分類</span>
+                      </h3>
+                      <div className="space-y-3 mb-4 max-h-[20vh] overflow-y-auto pr-2">
+                        {(selectedRequest.billing_details || []).map((bill, index) => (
+                          <div key={index} className="grid grid-cols-12 gap-2 items-center bg-white p-2 rounded border shadow-sm">
+                            <div className="col-span-5 text-sm font-bold text-indigo-700 truncate" title={bill.service_item}>
+                              {bill.service_item}
+                            </div>
+                            <div className="col-span-3">
+                              <input 
+                                type="number" 
+                                step="0.1" 
+                                placeholder="時數"
+                                value={bill.hours} 
+                                onChange={(e) => {
+                                  const newBilling = [...selectedRequest.billing_details];
+                                  newBilling[index].hours = e.target.value;
+                                  setSelectedRequest({...selectedRequest, billing_details: newBilling});
+                                }}
+                                className="w-full px-2 py-1 border rounded text-sm focus:ring-2 focus:ring-indigo-500"
+                              />
+                            </div>
+                            <div className="col-span-1 text-center text-gray-400 text-xs">x</div>
+                            <div className="col-span-3">
+                              <input 
+                                type="number" 
+                                placeholder="$ 費率"
+                                value={bill.rate} 
+                                onChange={(e) => {
+                                  const newBilling = [...selectedRequest.billing_details];
+                                  newBilling[index].rate = e.target.value;
+                                  setSelectedRequest({...selectedRequest, billing_details: newBilling});
+                                }}
+                                className="w-full px-2 py-1 border rounded text-sm focus:ring-2 focus:ring-indigo-500"
+                              />
+                            </div>
+                          </div>
+                        ))}
+                        {(!selectedRequest.billing_details || selectedRequest.billing_details.length === 0) && (
+                          <p className="text-sm text-gray-500 text-center py-2">無計算項目</p>
+                        )}
+                      </div>
+                      <div className="bg-indigo-600 p-3 rounded-lg flex justify-between items-center text-white shadow-inner">
+                        <span className="font-bold opacity-90">總花費金額</span>
+                        <span className="font-bold text-2xl">
+                          ${(selectedRequest.billing_details || []).reduce((sum, item) => sum + (Number(item.hours || 0) * Number(item.rate || 0)), 0)}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
               
-              {/* 統一儲存按鈕 */}
-              <div className="flex gap-3 border-t pt-4">
-                <button onClick={() => setSelectedRequest(null)} className="flex-1 px-4 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition font-medium">取消</button>
-                <button onClick={handleSaveModal} className="flex-1 px-4 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition font-medium shadow-md">儲存變更</button>
+              {/* === 底部按鈕區 (永遠固定在最下方) === */}
+              <div className="p-5 border-t border-gray-200 bg-gray-50 flex gap-3 rounded-b-xl flex-shrink-0">
+                <button onClick={() => setSelectedRequest(null)} className="flex-1 px-4 py-3 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition font-medium">取消 (不儲存返回)</button>
+                <button onClick={handleSaveModal} className="flex-1 px-4 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition font-medium shadow-md">確認儲存變更</button>
               </div>
 
             </div>
