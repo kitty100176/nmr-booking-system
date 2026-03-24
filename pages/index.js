@@ -1948,7 +1948,10 @@ if (!isLoggedIn) {
                       <p className="text-sm mb-1"><span className="text-gray-500">Email:</span> {selectedRequest.email}</p>
                       <div className="mt-3 pt-3 border-t">
                         <span className="text-gray-500 text-sm block mb-1">備註:</span>
-                        <p className="text-sm whitespace-pre-wrap bg-white p-2 rounded border">{selectedRequest.note || '無'}</p>
+                        {/* 加上 break-words 防止長字串撐破，加上 max-h 防止內容過長佔據太多空間 */}
+                        <p className="text-sm whitespace-pre-wrap break-words bg-white p-2 rounded border max-h-48 overflow-y-auto shadow-inner">
+                          {selectedRequest.note || '無'}
+                        </p>
                       </div>
                     </div>
 
