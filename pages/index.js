@@ -1,6 +1,11 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Calendar, Clock, User, LogOut, Settings, X, Check, AlertCircle, UserCheck, UserX, UserPlus, Trash2, Edit, DollarSign, FileWarning, Save, ChevronDown, ChevronRight, Zap, ClipboardList, Bell, ArrowLeft, GripVertical } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+// 修改 的引用
+import { 
+  Calendar, Clock, User, LogOut, Settings, X, Check, AlertCircle, 
+  UserCheck, UserX, UserPlus, Trash2, Edit, DollarSign, FileWarning, 
+  Save, ChevronDown, ChevronRight, Zap, ClipboardList, Bell, ArrowLeft, 
+  GripVertical, Eye, EyeOff // 新增這兩個圖示
+} from 'lucide-react';import { supabase } from '../lib/supabase';
 
 // 輔助函式：取得今天的日期字串 (YYYY-MM-DD)  
 const getTodayString = () => {
@@ -10,6 +15,8 @@ const getTodayString = () => {
 
 export default function NMRBookingSystem() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [showPassword, setShowPassword] = useState(false); // 控制密碼顯隱
+  const [filterLab, setFilterLab] = useState('');           // 控制實驗室篩選
   const [currentUser, setCurrentUser] = useState(null);
   const [showNotification, setShowNotification] = useState(false);
   const [showHistoryNotice, setShowHistoryNotice] = useState(false);
@@ -46,6 +53,7 @@ export default function NMRBookingSystem() {
     instruments: [],
     is_admin: false
   });
+
 
   // === 新增功能的 State ===
   const [showBillingModal, setShowBillingModal] = useState(false);
@@ -1240,13 +1248,26 @@ if (!isLoggedIn) {
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">密碼 Password</label>
-                      <input
-                        type="password"
-                        value={loginForm.password}
-                        onChange={(e) => setLoginForm({...loginForm, password: e.target.value})}
-                        onKeyPress={(e) => e.key === 'Enter' && handleLogin()}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                      />
+                      <div>
+  <label className="block text-sm font-medium text-gray-700 mb-2">密碼 Password</label>
+  <div className="relative"> {/* 加入相對定位容器 */}
+    <input
+      type={showPassword ? "text" : "password"} // 切換輸入類型
+      value={loginForm.password}
+      onChange={(e) => setLoginForm({...loginForm, password: e.target.value})}
+      onKeyPress={(e) => e.key === 'Enter' && handleLogin()}
+      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent pr-10"
+    />
+    {/* 右側眼睛按鈕 */}
+    <button
+      type="button"
+      onClick={() => setShowPassword(!showPassword)}
+      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition"
+    >
+      {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+    </button>
+  </div>
+</div>
                     </div>
                     <button
                       onClick={handleLogin}
