@@ -2216,11 +2216,12 @@ if (!isLoggedIn) {
             <div className="space-y-4">
               {/* 修改：加入 .filter() 邏輯 */}
               {users
-                .filter(user => !filterLab || user.pi === filterLab)
-                .map(user => (
-                <div key={user.id} className={`border rounded-lg p-4 ${!user.active ?                  <div className="flex justify-between items-start mb-3">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
+  .filter(user => !filterLab || user.pi === filterLab)
+  .map(user => (
+  <div key={user.id} className={`border rounded-lg p-4 ${!user.active ? 'bg-gray-100' : 'bg-white'}`}>
+    <div className="flex justify-between items-start mb-3">
+      <div className="flex-1">
+        <div className="flex items-center gap-2">
                         <p className="font-semibold text-lg">{user.display_name}</p>
                         {user.active === false && <span className="px-2 py-1 bg-red-100 text-red-700 text-xs rounded-full">已停用</span>}
                         {user.active !== false && <span className="px-2 py-1 bg-green-100 text-green-700 text-xs rounded-full">已啟用</span>}
