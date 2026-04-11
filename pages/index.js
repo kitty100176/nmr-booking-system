@@ -1246,19 +1246,16 @@ if (!isLoggedIn) {
                         className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                       />
                     </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">密碼 Password</label>
-                      <div>
+<div>
   <label className="block text-sm font-medium text-gray-700 mb-2">密碼 Password</label>
-  <div className="relative"> {/* 加入相對定位容器 */}
+  <div className="relative">
     <input
-      type={showPassword ? "text" : "password"} // 切換輸入類型
+      type={showPassword ? "text" : "password"}
       value={loginForm.password}
       onChange={(e) => setLoginForm({...loginForm, password: e.target.value})}
       onKeyPress={(e) => e.key === 'Enter' && handleLogin()}
       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent pr-10"
     />
-    {/* 右側眼睛按鈕 */}
     <button
       type="button"
       onClick={() => setShowPassword(!showPassword)}
@@ -1268,7 +1265,6 @@ if (!isLoggedIn) {
     </button>
   </div>
 </div>
-                    </div>
                     <button
                       onClick={handleLogin}
                       className="w-full bg-indigo-600 text-white py-3 rounded-lg hover:bg-indigo-700 transition font-medium shadow-sm hover:shadow-md"
