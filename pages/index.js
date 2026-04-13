@@ -67,8 +67,7 @@ export default function NMRBookingSystem() {
   const [loginTab, setLoginTab] = useState('internal'); // 'internal' | 'external'
   const [externalForm, setExternalForm] = useState({ 
     name: '', email: '', phone: '', unit: '', note: '', 
-    samples: [{ solvent: '', code: '', service_item: '' }] 
-  });
+    samples: [{ solvent: '', code: '', test_items: '', service_item: '' }]  });
 
   const handleSampleChange = (index, field, value) => {
     const newSamples = [...externalForm.samples];
@@ -84,8 +83,7 @@ export default function NMRBookingSystem() {
       samples: [
         ...externalForm.samples, 
         // 幫忙填入上一個的 Solvent 和 服務項目，但把「編碼」清空讓使用者重填
-        { solvent: lastSample?.solvent || '', code: '', service_item: lastSample?.service_item || '' }
-      ] 
+        { solvent: lastSample?.solvent || '', code: '', test_items: '', service_item: lastSample?.service_item || '' }      ] 
     });
   };
 
@@ -1309,16 +1307,19 @@ if (!isLoggedIn) {
                               <X className="w-3 h-3" />
                             </button>
                           )}
-                          <div className="grid grid-cols-2 gap-3 mb-2">
+                            <div className="grid grid-cols-2 gap-3 mb-2">
                             <div><label className="block text-xs font-medium text-gray-700 mb-1">D-Solvent</label><input type="text" value={sample.solvent} onChange={(e) => handleSampleChange(index, 'solvent', e.target.value)} className="w-full px-2 py-1.5 border border-gray-300 rounded focus:ring-1 focus:ring-indigo-500 text-sm" placeholder="例如: CDCl3" /></div>
                             <div><label className="block text-xs font-medium text-gray-700 mb-1">編碼 *</label><input type="text" value={sample.code} onChange={(e) => handleSampleChange(index, 'code', e.target.value)} className="w-full px-2 py-1.5 border border-gray-300 rounded focus:ring-1 focus:ring-indigo-500 text-sm" placeholder="樣品編號" /></div>
                           </div>
-                          <div>
-                            <label className="block text-xs font-medium text-gray-700 mb-1">服務項目 *</label>
-                            <select value={sample.service_item} onChange={(e) => handleSampleChange(index, 'service_item', e.target.value)} className="w-full px-2 py-1.5 border border-gray-300 rounded focus:ring-1 focus:ring-indigo-500 text-sm">
-                              <option value="">請選擇服務項目</option>
-                              {serviceItems.map(item => (<option key={item.id} value={item.name}>{item.name}</option>))}
-                            </select>
+                          <div className="grid grid-cols-2 gap-3 mb-2">
+                            <div><label className="block text-xs font-medium text-gray-700 mb-1">測試項目</label><input type="text" value={sample.test_items || ''} onChange={(e) => handleSampleChange(index, 'test_items', e.target.value)} className="w-full px-2 py-1.5 border border-gray-300 rounded focus:ring-1 focus:ring-indigo-500 text-sm" placeholder="例如: 1H, 13C" /></div>
+                            <div>
+                              <label className="block text-xs font-medium text-gray-700 mb-1">服務項目 *</label>
+                              <select value={sample.service_item} onChange={(e) => handleSampleChange(index, 'service_item', e.target.value)} className="w-full px-2 py-1.5 border border-gray-300 rounded focus:ring-1 focus:ring-indigo-500 text-sm">
+                                <option value="">請選擇服務項目</option>
+                                {serviceItems.map(item => (<option key={item.id} value={item.name}>{item.name}</option>))}
+                              </select>
+                            </div>
                           </div>
                         </div>
                       ))}
@@ -1985,6 +1986,7 @@ if (!isLoggedIn) {
                             </div>
                             <div className="flex flex-col text-xs text-gray-600 space-y-1 mt-2">
                               <p>Solvent: <span className="text-gray-800">{s.solvent || '未填'}</span></p>
+                              <p>測試項目: <span className="text-gray-800">{s.test_items || '未填'}</span></p>
                               <p>服務: <span className="text-indigo-700 font-medium">{s.service_item}</span></p>
                             </div>
                           </div>

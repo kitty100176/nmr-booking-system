@@ -8,8 +8,7 @@ export default async function handler(req, res) {
 
   try {
     // === 修改這裡：在樣品明細中加入 Solvent 資訊 ===
-    const sampleText = samples.map((s, i) => `[${i+1}] 編碼: ${s.code} / Solvent: ${s.solvent || '未填'} / 項目: ${s.service_item}`).join('\n');
-    
+const sampleText = samples.map((s, i) => `[${i+1}] 編碼: ${s.code} / Solvent: ${s.solvent || '未填'} / 測試: ${s.test_items || '未填'} / 項目: ${s.service_item}`).join('\n');    
     // === 1. 發送 LINE 廣播通知 ===
     const lineToken = process.env.LINE_CHANNEL_ACCESS_TOKEN;
     if (lineToken) {
