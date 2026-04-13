@@ -1,13 +1,8 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-// 修改 的引用
-import { 
-  Calendar, Clock, User, LogOut, Settings, X, Check, AlertCircle, 
-  UserCheck, UserX, UserPlus, Trash2, Edit, DollarSign, FileWarning, 
-  Save, ChevronDown, ChevronRight, Zap, ClipboardList, Bell, ArrowLeft, 
-  GripVertical, Eye, EyeOff // 新增這兩個圖示
-} from 'lucide-react';import { supabase } from '../lib/supabase';
+import { Calendar, Clock, User, LogOut, Settings, X, Check, AlertCircle, UserCheck, UserX, UserPlus, Trash2, Edit, DollarSign, FileWarning, Save, ChevronDown, ChevronRight, Zap, Eye, EyeOff } from 'lucide-react';
+import { supabase } from '../lib/supabase';
 
-// 輔助函式：取得今天的日期字串 (YYYY-MM-DD)  
+// 輔助函式：取得今天的日期字串 (YYYY-MM-DD)
 const getTodayString = () => {
   const today = new Date();
   return today.toISOString().split('T')[0];
@@ -15,8 +10,6 @@ const getTodayString = () => {
 
 export default function NMRBookingSystem() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [showPassword, setShowPassword] = useState(false); // 控制密碼顯隱
-  const [filterLab, setFilterLab] = useState('');           // 控制實驗室篩選
   const [currentUser, setCurrentUser] = useState(null);
   const [showNotification, setShowNotification] = useState(false);
   const [showHistoryNotice, setShowHistoryNotice] = useState(false);
@@ -54,214 +47,18 @@ export default function NMRBookingSystem() {
     is_admin: false
   });
 
-
   // === 新增功能的 State ===
   const [showBillingModal, setShowBillingModal] = useState(false);
   const [showViolationModal, setShowViolationModal] = useState(false);
   const [currentViolationUser, setCurrentViolationUser] = useState(null);
   const [violationText, setViolationText] = useState('');
   const [hourlyRate, setHourlyRate] = useState(100);
+  // === 新增的控制狀態 ===
+  const [showPassword, setShowPassword] = useState(false);
+  const [selectedLabFilter, setSelectedLabFilter] = useState('');
   // ======================
 
-// === 送測服務 CRM State ===
-  const [loginTab, setLoginTab] = useState('internal'); // 'internal' | 'external'
-  const [externalForm, setExternalForm] = useState({ 
-    name: '', email: '', phone: '', unit: '', note: '', 
-    samples: [{ solvent: '', code: '', test_items: '', service_item: '' }]  });
-
-  const handleSampleChange = (index, field, value) => {
-    const newSamples = [...externalForm.samples];
-    newSamples[index][field] = value;
-    setExternalForm({ ...externalForm, samples: newSamples });
-  };
-
-  const addSample = () => {
-    // 取得目前最後一個樣品的資料
-    const lastSample = externalForm.samples[externalForm.samples.length - 1];
-    setExternalForm({ 
-      ...externalForm, 
-      samples: [
-        ...externalForm.samples, 
-        // 幫忙填入上一個的 Solvent 和 服務項目，但把「編碼」清空讓使用者重填
-        { solvent: lastSample?.solvent || '', code: '', test_items: '', service_item: lastSample?.service_item || '' }      ] 
-    });
-  };
-
-  // === 新增：給編輯服務項目 Modal 用的預設金額 State ===
-  const [newServiceItemPrice, setNewServiceItemPrice] = useState(100);
-
-  const removeSample = (index) => {
-    const newSamples = externalForm.samples.filter((_, i) => i !== index);
-    setExternalForm({ ...externalForm, samples: newSamples });
-  };
-  const [serviceItems, setServiceItems] = useState([]);
-  const [externalRequests, setExternalRequests] = useState([]);
-  const [showExternalPanel, setShowExternalPanel] = useState(false);
-  const [selectedRequest, setSelectedRequest] = useState(null);
-  const [showServiceItemModal, setShowServiceItemModal] = useState(false);
-  const [newServiceItemName, setNewServiceItemName] = useState('');
-  // ==========================
-
   const INSTRUMENTS = ['60', '500'];
-
-// === 服務項目拖曳與編輯邏輯 ===
-  const [draggedItemIndex, setDraggedItemIndex] = useState(null);
-
-  const loadServiceItems = async () => {
-    // 改為依照 sort_order 排序，如果順序一樣再依 id 排
-    const { data } = await supabase.from('service_items').select('*').order('sort_order', { ascending: true }).order('id');
-    if (data) setServiceItems(data);
-  };
-
-  const handleDragStart = (index) => {
-    setDraggedItemIndex(index);
-  };
-
-  const handleDragEnter = (index) => {
-    if (draggedItemIndex === null || draggedItemIndex === index) return;
-    const newItems = [...serviceItems];
-    const draggedItem = newItems[draggedItemIndex];
-    newItems.splice(draggedItemIndex, 1);
-    newItems.splice(index, 0, draggedItem);
-    setDraggedItemIndex(index);
-    setServiceItems(newItems); // 畫面即時重新排序
-  };
-
-  const handleDragEnd = async () => {
-    setDraggedItemIndex(null);
-    try {
-      // 拖曳放開後，將新的排序順序批次存入 Supabase
-      const updates = serviceItems.map((item, index) => ({
-        id: item.id,
-        name: item.name,
-        default_price: item.default_price,
-        sort_order: index
-      }));
-      const { error } = await supabase.from('service_items').upsert(updates);
-      if (error) throw error;
-    } catch (e) {
-      console.error("排序儲存失敗", e);
-    }
-  };
-
-  const handleUpdateServiceName = async (id, newName) => {
-    if (!newName || newName.trim() === '') return;
-    await supabase.from('service_items').update({ name: newName.trim() }).eq('id', id);
-    loadServiceItems();
-  };
-  // ==========================
-
-  const loadExternalRequests = async () => {
-    const { data } = await supabase.from('external_requests').select('*').order('created_at', { ascending: false });
-    if (data) setExternalRequests(data);
-  };
-
-  useEffect(() => {
-    loadServiceItems();
-    loadExternalRequests(); // 系統載入時預先讀取，為了算紅點數量
-  }, []);
-
-const handleSaveModal = async () => {
-    if (!selectedRequest) return;
-    // 計算總金額 (時數 * 費率)
-    const total = (selectedRequest.billing_details || []).reduce((sum, item) => sum + (Number(item.hours || 0) * Number(item.rate || 0)), 0);
-
-    try {
-      const updates = {
-        status: selectedRequest.status,
-        admin_note: selectedRequest.admin_note,
-        billing_details: selectedRequest.billing_details,
-        total_cost: total
-      };
-      const { error } = await supabase.from('external_requests').update(updates).eq('id', selectedRequest.id);
-      if (error) throw error;
-      alert('儲存成功！');
-      await loadExternalRequests();
-      setSelectedRequest(null);
-    } catch (error) {
-      alert('儲存失敗');
-    }
-  };
-
-  const handleUpdateServicePrice = async (id, newPrice) => {
-    await supabase.from('service_items').update({ default_price: newPrice }).eq('id', id);
-    loadServiceItems();
-  };
-
-const handleExternalSubmit = async () => {
-    // 1. 檢查必填加入 phone 和 unit
-    if (!externalForm.name || !externalForm.email || !externalForm.phone || !externalForm.unit) {
-      alert('請填寫必填欄位 (姓名、單位、電話、Email)');
-      return;
-    }
-    
-    const hasInvalidSample = externalForm.samples.some(s => !s.code || !s.service_item);
-    if (hasInvalidSample) {
-      alert('請確保「所有樣品」都已填寫編碼與服務項目');
-      return;
-    }
-
-    try {
-      // 2. 存入 Supabase 加入 phone 和 unit
-      const { error } = await supabase.from('external_requests').insert([{ 
-        name: externalForm.name,
-        email: externalForm.email,
-        phone: externalForm.phone,
-        unit: externalForm.unit,
-        note: externalForm.note,
-        samples: externalForm.samples
-      }]);
-      if (error) throw error;
-      
-      alert('表單送出成功！我們會盡快與您聯絡。');
-      
-      // 3. 清空表單加入 phone 和 unit
-      setExternalForm({ 
-        name: '', email: '', phone: '', unit: '', note: '', 
-        samples: [{ solvent: '', code: '', service_item: '' }] 
-      });
-      await loadExternalRequests();
-
-      // 4. 通知 API 加入 phone 和 unit
-      try {
-        await fetch('/api/notify', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            name: externalForm.name,
-            email: externalForm.email,
-            phone: externalForm.phone,
-            unit: externalForm.unit,
-            samples: externalForm.samples,
-            note: externalForm.note
-          })
-        });
-      } catch (notifyError) {
-        console.error('通知發送異常', notifyError);
-      }
-
-    } catch (error) {
-      console.error(error);
-      alert('送出失敗，請稍後再試');
-    }
-  };
-
-  const handleDeleteRequest = async (id, name, e) => {
-    e.stopPropagation(); // 阻止事件冒泡，避免點擊刪除按鈕時不小心打開詳細資料 Modal
-    if (!window.confirm(`確定要刪除「${name}」的委託單嗎？此操作無法復原！`)) {
-      return;
-    }
-    try {
-      const { error } = await supabase.from('external_requests').delete().eq('id', id);
-      if (error) throw error;
-      alert('委託單已刪除！');
-      await loadExternalRequests(); // 重新整理列表
-      if (selectedRequest?.id === id) setSelectedRequest(null);
-    } catch (error) {
-      console.error('刪除失敗:', error);
-      alert('刪除失敗，請稍後再試');
-    }
-  };
 
   // 生成時段
   const generateTimeSlots = useCallback(() => {
@@ -402,7 +199,12 @@ const handleExternalSubmit = async () => {
 
   const loadSystemSettings = async () => {
     try {
-      const { data, error } = await supabase.from('system_settings').select('*').eq('id', 1).single();
+      const { data, error } = await supabase
+        .from('system_settings')
+        .select('*')
+        .eq('id', 1)
+        .single();
+      
       if (data) {
         setSystemSettings(data);
         if (data.hourly_rate) setHourlyRate(data.hourly_rate);
@@ -415,13 +217,6 @@ const handleExternalSubmit = async () => {
           rule5: '使用前請確認已通過該儀器操作訓練',
           rule6: '如有問題請聯絡管理員',
           rule7: '',
-          ext_rule1: '歡迎使用送測服務，請詳細填寫左側表單',
-          ext_rule2: '樣品請妥善包裝並標示編號',
-          ext_rule3: '若有特殊需求請在備註欄說明',
-          ext_rule4: '',
-          ext_rule5: '',
-          ext_rule6: '',
-          ext_rule7: '',
           hourly_rate: 100
         };
         setSystemSettings(defaultSettings);
@@ -510,8 +305,6 @@ const handleExternalSubmit = async () => {
     setShowLabManagementPanel(false);
     setShowTimeSlotPanel(false);
     setBookings([]);
-    setShowExternalPanel(false);
-    setSelectedRequest(null);
   };
 
   const isTimePassed = (date, timeSlot) => {
@@ -738,12 +531,16 @@ const handleExternalSubmit = async () => {
     try {
       const { data: existing } = await supabase.from('system_settings').select('id').eq('id', 1).single();
       const updateData = {
-        rule1: systemSettings.rule1, rule2: systemSettings.rule2, rule3: systemSettings.rule3, 
-        rule4: systemSettings.rule4, rule5: systemSettings.rule5, rule6: systemSettings.rule6, rule7: systemSettings.rule7,
-        ext_rule1: systemSettings.ext_rule1, ext_rule2: systemSettings.ext_rule2, ext_rule3: systemSettings.ext_rule3,
-        ext_rule4: systemSettings.ext_rule4, ext_rule5: systemSettings.ext_rule5, ext_rule6: systemSettings.ext_rule6, ext_rule7: systemSettings.ext_rule7,
+        rule1: systemSettings.rule1,
+        rule2: systemSettings.rule2,
+        rule3: systemSettings.rule3,
+        rule4: systemSettings.rule4,
+        rule5: systemSettings.rule5,
+        rule6: systemSettings.rule6,
+        rule7: systemSettings.rule7,
         hourly_rate: hourlyRate
       };
+
       if (existing) {
         const { error } = await supabase.from('system_settings').update(updateData).eq('id', 1);
         if (error) throw error;
@@ -1191,175 +988,69 @@ const handleExternalSubmit = async () => {
     );
   };
 
-
-if (!isLoggedIn) {
+  if (!isLoggedIn) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
         <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full overflow-hidden">
           <div className="flex flex-col md:flex-row">
-            
-            {/* ====== 左半邊：登入與送測表單區塊 ====== */}
-            <div className="md:w-1/2 p-6 md:p-8 flex flex-col h-full relative">
+            <div className="md:w-1/2 p-8">
               <div className="flex items-center gap-3 mb-6">
                 <Calendar className="w-8 h-8 text-indigo-600" />
-                <h1 className="text-3xl font-bold text-gray-800">NDHU_NMR</h1>
+                <h1 className="text-3xl font-bold text-gray-800">NMR預約系統</h1>
               </div>
-
-              {/* 真實標籤頁 (Folder Tabs) 設計 */}
-              <div className="flex border-b border-gray-300 mb-5">
-                <button 
-                  onClick={() => setLoginTab('internal')}
-                  className={`flex-1 py-2.5 px-4 text-center text-sm md:text-base transition-all duration-200 rounded-t-lg border-t border-l border-r ${
-                    loginTab === 'internal' 
-                      ? 'bg-white text-indigo-600 font-bold border-gray-300 border-b-white -mb-px z-10' 
-                      : 'bg-gray-100 text-gray-500 font-medium border-transparent hover:bg-gray-200 hover:text-gray-700'
-                  }`}
-                >
-                  校內登入
-                </button>
-                <button 
-                  onClick={() => setLoginTab('external')}
-                  className={`flex-1 py-2.5 px-4 text-center text-sm md:text-base transition-all duration-200 rounded-t-lg border-t border-l border-r ${
-                    loginTab === 'external' 
-                      ? 'bg-white text-indigo-600 font-bold border-gray-300 border-b-white -mb-px z-10' 
-                      : 'bg-gray-100 text-gray-500 font-medium border-transparent hover:bg-gray-200 hover:text-gray-700'
-                  }`}
-                >
-                  送測服務
-                </button>
-              </div>
-
-              {/* 表單切換內容區 */}
-              <div className="flex-1 overflow-y-auto pr-2">
-                {loginTab === 'internal' ? (
-                  /* --- 狀態 1：校內登入 --- */
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">帳號 Account</label>
-                      <input
-                        type="text"
-                        value={loginForm.username}
-                        onChange={(e) => setLoginForm({...loginForm, username: e.target.value})}
-                        onKeyPress={(e) => e.key === 'Enter' && handleLogin()}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                      />
-                    </div>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">帳號 Account</label>
+                  <input
+                    type="text"
+                    value={loginForm.username}
+                    onChange={(e) => setLoginForm({...loginForm, username: e.target.value})}
+                    onKeyPress={(e) => e.key === 'Enter' && handleLogin()}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  />
+                </div>
 <div>
-  <label className="block text-sm font-medium text-gray-700 mb-2">密碼 Password</label>
-  <div className="relative">
-    <input
-      type={showPassword ? "text" : "password"}
-      value={loginForm.password}
-      onChange={(e) => setLoginForm({...loginForm, password: e.target.value})}
-      onKeyPress={(e) => e.key === 'Enter' && handleLogin()}
-      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent pr-10"
-    />
-    <button
-      type="button"
-      onClick={() => setShowPassword(!showPassword)}
-      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition"
-    >
-      {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-    </button>
-  </div>
-</div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">密碼 Password</label>
+                  <div className="relative">
+                    <input
+                      type={showPassword ? "text" : "password"}
+                      value={loginForm.password}
+                      onChange={(e) => setLoginForm({...loginForm, password: e.target.value})}
+                      onKeyPress={(e) => e.key === 'Enter' && handleLogin()}
+                      className="w-full pl-4 pr-12 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                    />
                     <button
-                      onClick={handleLogin}
-                      className="w-full bg-indigo-600 text-white py-3 rounded-lg hover:bg-indigo-700 transition font-medium shadow-sm hover:shadow-md"
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-indigo-600 transition"
                     >
-                      登入 Login
+                      {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                     </button>
-                    <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                      <div className="flex items-start gap-2">
-                        <AlertCircle className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
-                        <div className="text-sm text-blue-800">
-                          <p className="mb-1">請使用您的帳號密碼登入系統</p>
-                          <p>Please login with your account and password</p>
-                        </div>
-                      </div>
-                    </div>
                   </div>
-                ) : (
-                  /* --- 狀態 2：送測服務表單 --- */
-                  <div className="space-y-4 pb-4">
-                    <div className="grid grid-cols-2 gap-3">
-                      <div><label className="block text-xs font-medium text-gray-700 mb-1">姓名 *</label><input type="text" value={externalForm.name} onChange={(e) => setExternalForm({...externalForm, name: e.target.value})} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm bg-gray-50 focus:bg-white transition-colors" placeholder="請輸入姓名" /></div>
-                      <div><label className="block text-xs font-medium text-gray-700 mb-1">Email *</label><input type="email" value={externalForm.email} onChange={(e) => setExternalForm({...externalForm, email: e.target.value})} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm bg-gray-50 focus:bg-white transition-colors" placeholder="聯絡信箱" /></div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3">
-                      <div><label className="block text-xs font-medium text-gray-700 mb-1">單位/實驗室 *</label><input type="text" value={externalForm.unit} onChange={(e) => setExternalForm({...externalForm, unit: e.target.value})} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm bg-gray-50 focus:bg-white transition-colors" placeholder="例如: 化學系 王大明Lab" /></div>
-                      <div><label className="block text-xs font-medium text-gray-700 mb-1">聯絡電話 *</label><input type="text" value={externalForm.phone} onChange={(e) => setExternalForm({...externalForm, phone: e.target.value})} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm bg-gray-50 focus:bg-white transition-colors" placeholder="手機或分機" /></div>
-                    </div>
-
-                    {/* === 動態樣品清單區塊 === */}
-                    <div className="bg-indigo-50/50 border border-indigo-100 rounded-lg p-3 space-y-3 max-h-[35vh] overflow-y-auto">
-                      <div className="flex justify-between items-center mb-1">
-                        <label className="block text-sm font-bold text-indigo-800">樣品清單 Samples</label>
-                        <button onClick={addSample} className="text-xs bg-indigo-600 text-white px-2 py-1 rounded hover:bg-indigo-700 transition shadow-sm">+ 新增樣品</button>
-                      </div>
-                      
-                      {externalForm.samples.map((sample, index) => (
-                        <div key={index} className="bg-white p-3 border border-indigo-200 rounded-lg relative shadow-sm">
-                          <h4 className="text-xs font-bold text-gray-500 mb-2 border-b pb-1">樣品 #{index + 1}</h4>
-                          {externalForm.samples.length > 1 && (
-                            <button onClick={() => removeSample(index)} className="absolute top-2 right-2 text-red-400 hover:text-red-600 p-1 bg-red-50 rounded">
-                              <X className="w-3 h-3" />
-                            </button>
-                          )}
-                          {/* 第一排：Solvent 與 編碼並排 (較短的資訊) */}
-                          <div className="grid grid-cols-2 gap-3 mb-3">
-                            <div><label className="block text-xs font-medium text-gray-700 mb-1">D-Solvent</label><input type="text" value={sample.solvent} onChange={(e) => handleSampleChange(index, 'solvent', e.target.value)} className="w-full px-2 py-1.5 border border-gray-300 rounded focus:ring-1 focus:ring-indigo-500 text-sm" placeholder="例如: CDCl3" /></div>
-                            <div><label className="block text-xs font-medium text-gray-700 mb-1">編碼 *</label><input type="text" value={sample.code} onChange={(e) => handleSampleChange(index, 'code', e.target.value)} className="w-full px-2 py-1.5 border border-gray-300 rounded focus:ring-1 focus:ring-indigo-500 text-sm" placeholder="樣品編號" /></div>
-                          </div>
-                          
-                          {/* 第二排：測試項目 (給予完整寬度) */}
-                          <div className="mb-3">
-                            <label className="block text-xs font-medium text-gray-700 mb-1">測試項目</label>
-                            <input type="text" value={sample.test_items || ''} onChange={(e) => handleSampleChange(index, 'test_items', e.target.value)} className="w-full px-2 py-1.5 border border-gray-300 rounded focus:ring-1 focus:ring-indigo-500 text-sm" placeholder="例如: 1H, 13C (若有多項請用逗號分隔)" />
-                          </div>
-
-                          {/* 第三排：服務項目 (給予完整寬度，解決字太多被卡住的問題) */}
-                          <div>
-                            <label className="block text-xs font-medium text-gray-700 mb-1">服務項目 *</label>
-                            <select value={sample.service_item} onChange={(e) => handleSampleChange(index, 'service_item', e.target.value)} className="w-full px-2 py-1.5 border border-gray-300 rounded focus:ring-1 focus:ring-indigo-500 text-sm">
-                              <option value="">請選擇服務項目</option>
-                              {serviceItems.map(item => (<option key={item.id} value={item.name}>{item.name}</option>))}
-                            </select>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* === 備註框 === */}
-                    <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-1">備註 (可拖曳右下角放大)</label>
-                      <textarea 
-                        value={externalForm.note} 
-                        onChange={(e) => setExternalForm({...externalForm, note: e.target.value})} 
-                        rows={4} 
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm bg-gray-50 focus:bg-white transition-colors" 
-                        placeholder={"其他需要特別說明的需求...\n※ 若需調整實驗參數或附上參考文獻，請將相關檔案寄至：ndhu.nmr@gmail.com"} 
-                      />
-                    </div>
-                    <button onClick={handleExternalSubmit} className="w-full bg-green-600 text-white py-3 rounded-lg hover:bg-green-700 transition font-medium mt-2 shadow-sm hover:shadow-md">送出申請 Submit</button>
+                </div>
+                <button
+                  onClick={handleLogin}
+                  className="w-full bg-indigo-600 text-white py-3 rounded-lg hover:bg-indigo-700 transition font-medium"
+                >
+                  登入 Login
+                </button>
+              </div>
+              <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <div className="flex items-start gap-2">
+                  <AlertCircle className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
+                  <div className="text-sm text-blue-800">
+                    <p className="mb-1">請使用您的帳號密碼登入系統</p>
+                    <p>Please login with your account and password</p>
                   </div>
-                )}
+                </div>
               </div>
             </div>
-
-            {/* ====== 右半邊：動態切換規則與背景色 ====== */}
-            <div className={`md:w-1/2 text-white p-8 flex flex-col max-h-screen transition-colors duration-500 ${loginTab === 'internal' ? 'bg-indigo-600' : 'bg-teal-600'}`}>
-              <h2 className="text-2xl font-bold mb-6 flex-shrink-0">
-                {loginTab === 'internal' ? '使用規則 Rules' : '送測須知 Instructions'}
-              </h2>
+            <div className="md:w-1/2 bg-indigo-600 text-white p-8 flex flex-col max-h-screen">
+              <h2 className="text-2xl font-bold mb-6 flex-shrink-0">使用規則 Rules</h2>
               <div className="space-y-4 overflow-y-auto flex-1 pr-2">
                 {systemSettings ? (
                   [1, 2, 3, 4, 5, 6, 7].map(num => {
-                    const ruleText = loginTab === 'internal' 
-                      ? systemSettings[`rule${num}`] 
-                      : systemSettings[`ext_rule${num}`];
-                      
+                    const ruleText = systemSettings[`rule${num}`];
                     if (!ruleText || ruleText.trim() === '') return null;
                     return (
                       <div key={num} className="flex items-start gap-3">
@@ -1373,7 +1064,6 @@ if (!isLoggedIn) {
                 )}
               </div>
             </div>
-            
           </div>
         </div>
       </div>
@@ -1686,62 +1376,35 @@ if (!isLoggedIn) {
             <button onClick={() => setShowSettingsPanel(false)} className="flex items-center gap-2 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition"><X className="w-4 h-4" />返回</button>
           </div>
         </div>
-<div className="max-w-7xl mx-auto p-4">
+        <div className="max-w-7xl mx-auto p-4">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            
-            {/* 左側編輯區 (加入捲軸與雙區塊) */}
             <div className="bg-white rounded-lg shadow-sm p-6">
-              <h2 className="text-xl font-bold mb-2">編輯介面文字</h2>
-              <p className="text-sm text-gray-600 mb-4">修改登入頁面與送測服務顯示的文字</p>
+              <h2 className="text-xl font-bold mb-2">編輯使用規則</h2>
+              <p className="text-sm text-gray-600 mb-6">修改登入頁面右側顯示的使用規則文字</p>
               {systemSettings && (
-                <div className="space-y-6 max-h-[60vh] overflow-y-auto pr-4">
-                  {/* 校內登入規則 */}
-                  <div className="bg-gray-50 p-4 rounded-lg border">
-                    <h3 className="text-lg font-bold border-b pb-2 mb-4 text-indigo-700">校內使用規則</h3>
-                    {[1, 2, 3, 4, 5, 6, 7].map(num => (
-                      <div key={`rule-${num}`} className="mb-3">
-                        <label className="block text-xs font-medium text-gray-700 mb-1">規則 {num}</label>
-                        <textarea value={systemSettings[`rule${num}`] || ''} onChange={(e) => setSystemSettings({ ...systemSettings, [`rule${num}`]: e.target.value })} rows={2} className="w-full px-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm"/>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* 送測服務須知 */}
-                  <div className="bg-gray-50 p-4 rounded-lg border">
-                    <h3 className="text-lg font-bold border-b pb-2 mb-4 text-teal-700">校外送測須知</h3>
-                    {[1, 2, 3, 4, 5, 6, 7].map(num => (
-                      <div key={`ext-${num}`} className="mb-3">
-                        <label className="block text-xs font-medium text-gray-700 mb-1">須知 {num}</label>
-                        <textarea value={systemSettings[`ext_rule${num}`] || ''} onChange={(e) => setSystemSettings({ ...systemSettings, [`ext_rule${num}`]: e.target.value })} rows={2} className="w-full px-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 text-sm"/>
-                      </div>
-                    ))}
-                  </div>
-                  <button onClick={handleSaveSettings} className="w-full mt-4 px-4 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition font-medium">儲存設定</button>
+                <div className="space-y-4">
+                  {[1, 2, 3, 4, 5, 6, 7].map(num => (
+                    <div key={num}>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">規則 {num}</label>
+                      <textarea value={systemSettings[`rule${num}`]} onChange={(e) => setSystemSettings({ ...systemSettings, [`rule${num}`]: e.target.value })} rows={3} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 resize-y" placeholder={`輸入規則 ${num} 的內容...`}/>
+                    </div>
+                  ))}
+                  <button onClick={handleSaveSettings} className="w-full mt-6 px-4 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition font-medium">儲存設定</button>
                 </div>
               )}
             </div>
-
-            {/* 右側即時預覽區 */}
-            <div className="lg:sticky lg:top-20 lg:self-start space-y-4">
-              <div className="bg-indigo-600 text-white p-6 rounded-lg shadow-sm">
-                <h3 className="text-lg font-bold mb-4 border-b border-indigo-400 pb-2">預覽：校內使用規則</h3>
-                <div className="space-y-3 text-sm">
-                  {systemSettings && [1, 2, 3, 4, 5, 6, 7].map(num => (
-                    systemSettings[`rule${num}`] && (
-                      <div key={`prev-rule-${num}`} className="flex items-start gap-2"><Check className="w-4 h-4 mt-0.5 flex-shrink-0" /><p className="whitespace-pre-wrap">{systemSettings[`rule${num}`]}</p></div>
-                    )
-                  ))}
-                </div>
-              </div>
-              
-              <div className="bg-teal-600 text-white p-6 rounded-lg shadow-sm">
-                <h3 className="text-lg font-bold mb-4 border-b border-teal-400 pb-2">預覽：校外送測須知</h3>
-                <div className="space-y-3 text-sm">
-                  {systemSettings && [1, 2, 3, 4, 5, 6, 7].map(num => (
-                    systemSettings[`ext_rule${num}`] && (
-                      <div key={`prev-ext-${num}`} className="flex items-start gap-2"><Check className="w-4 h-4 mt-0.5 flex-shrink-0" /><p className="whitespace-pre-wrap">{systemSettings[`ext_rule${num}`]}</p></div>
-                    )
-                  ))}
+            <div className="lg:sticky lg:top-20 lg:self-start">
+              <div className="bg-white rounded-lg shadow-sm p-6">
+                <h2 className="text-xl font-bold mb-2">即時預覽</h2>
+                <div className="bg-indigo-600 text-white p-6 rounded-lg max-h-[600px] overflow-y-auto">
+                  <h3 className="text-xl font-bold mb-4 sticky top-0 bg-indigo-600 pb-2">使用規則</h3>
+                  <div className="space-y-3">
+                    {systemSettings && [1, 2, 3, 4, 5, 6, 7].map(num => (
+                      systemSettings[`rule${num}`] && (
+                        <div key={num} className="flex items-start gap-3"><Check className="w-5 h-5 mt-0.5 flex-shrink-0" /><p className="text-sm whitespace-pre-wrap">{systemSettings[`rule${num}`]}</p></div>
+                      )
+                    ))}
+                  </div>
                 </div>
               </div>
             </div>
@@ -1878,317 +1541,6 @@ if (!isLoggedIn) {
     );
   }
 
-// === 校外委託管理面板 ===
-  if (showExternalPanel && currentUser?.is_admin) {
-    return (
-      <div className="min-h-screen bg-gray-50">
-        <div className="bg-white shadow-sm border-b">
-          <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
-            <h1 className="text-2xl font-bold text-gray-800">校外委託管理 (CRM)</h1>
-            <div className="flex gap-3">
-              <button onClick={() => setShowServiceItemModal(true)} className="flex items-center gap-2 px-4 py-2 bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 transition"><Settings className="w-4 h-4" />編輯服務項目</button>
-              <button onClick={() => setShowExternalPanel(false)} className="flex items-center gap-2 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition"><ArrowLeft className="w-4 h-4" />返回</button>
-            </div>
-          </div>
-        </div>
-        
-        <div className="max-w-7xl mx-auto p-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {externalRequests.map(req => {
-              const sampleCount = req.samples?.length || 0;
-              const firstSample = req.samples?.[0] || {};
-              return (
-                <div 
-                  key={req.id} 
-                  onClick={() => {
-                    // === 動態產生計費項目邏輯 ===
-                    let billing = req.billing_details;
-                    // 如果這張單子還沒有計費明細，就根據樣品種類自動產生
-                    if (!billing || billing.length === 0) {
-                      // 抓出所有不重複的服務項目 (例如 [1H NMR, 13C NMR])
-                      const uniqueServices = [...new Set((req.samples || []).map(s => s.service_item))].filter(Boolean);
-                      billing = uniqueServices.map(serviceName => {
-                        const serviceObj = serviceItems.find(item => item.name === serviceName);
-                        return {
-                          service_item: serviceName,
-                          hours: '', // 預設空白，可填小數點
-                          rate: serviceObj ? serviceObj.default_price : 100 // 帶入系統設定的預設金額
-                        };
-                      });
-                    }
-                    setSelectedRequest({ ...req, billing_details: billing });
-                  }} 
-                  className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm hover:shadow-md cursor-pointer transition flex flex-col h-full relative overflow-hidden"
-                >
-                  <div className={`absolute left-0 top-0 bottom-0 w-1 ${req.status === '未處理' ? 'bg-red-400' : req.status === '已完成' ? 'bg-green-400' : 'bg-gray-300'}`}></div>
-                  
-                  <div className="flex justify-between items-start mb-3 pl-2">
-                    <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${req.status === '未處理' ? 'bg-red-100 text-red-700' : req.status === '已聯絡' ? 'bg-yellow-100 text-yellow-700' : req.status === '已完成' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}`}>{req.status}</span>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-gray-400">{new Date(req.created_at).toLocaleDateString()}</span>
-                      <button onClick={(e) => handleDeleteRequest(req.id, req.name, e)} className="text-red-400 hover:text-red-600 p-1 rounded hover:bg-red-50 transition-colors" title="刪除此委託單"><Trash2 className="w-4 h-4" /></button>
-                    </div>
-                  </div>
-                  <h3 className="text-lg font-bold text-gray-800 mb-1 pl-2">{req.name}</h3>
-                  <div className="text-sm text-gray-500 mb-4 flex-1 pl-2">
-                    <p className="font-semibold text-indigo-600 mb-1">共 {sampleCount} 件樣品</p>
-                    {sampleCount > 0 && (
-                      <p className="text-xs truncate text-gray-400">代表編碼: {firstSample.code}</p>
-                    )}
-                  </div>
-                  <div className="border-t pt-3 mt-auto flex justify-between text-sm pl-2">
-                    <span className="text-gray-500">總金額:</span>
-                    <span className="font-bold text-indigo-600">${req.total_cost || 0}</span>
-                  </div>
-                </div>
-              );
-            })}
-            {externalRequests.length === 0 && <div className="col-span-full text-center py-12 text-gray-500">目前尚無委託單</div>}
-          </div>
-        </div>
-
-        {/* 委託單詳細內容 Modal */}
-        {selectedRequest && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-            {/* 改用 flex-col 讓內部可以切分頂部、中間滾動區、底部固定區 */}
-            <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full flex flex-col max-h-[90vh]">
-              
-              {/* === 頂部標題區 (固定不動，移除 X 按鈕) === */}
-              <div className="p-6 border-b border-gray-200 flex-shrink-0">
-                <h2 className="text-2xl font-bold text-gray-800">委託單處理作業</h2>
-              </div>
-
-              {/* === 中間內容區 (自動產生捲軸) === */}
-              <div className="p-6 overflow-y-auto flex-1">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  
-                  {/* 左側：客戶填寫內容 */}
-                  <div className="space-y-4">
-                    <div className="bg-gray-50 p-4 rounded-lg border">
-                      <h3 className="font-bold text-gray-700 border-b pb-2 mb-3">客戶基本資料</h3>
-                      <p className="text-sm mb-1"><span className="text-gray-500">姓名:</span> {selectedRequest.name}</p>
-                      <p className="text-sm mb-1"><span className="text-gray-500">單位:</span> {selectedRequest.unit}</p>
-                      <p className="text-sm mb-1"><span className="text-gray-500">電話:</span> {selectedRequest.phone}</p>
-                      <p className="text-sm mb-1"><span className="text-gray-500">Email:</span> {selectedRequest.email}</p>
-                      <div className="mt-3 pt-3 border-t">
-                        <span className="text-gray-500 text-sm block mb-1">備註:</span>
-                        {/* 加上 break-words 防止長字串撐破，加上 max-h 防止內容過長佔據太多空間 */}
-                        <p className="text-sm whitespace-pre-wrap break-words bg-white p-2 rounded border max-h-48 overflow-y-auto shadow-inner">
-                          {selectedRequest.note || '無'}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="bg-indigo-50/50 p-4 rounded-lg border border-indigo-100">
-                      <h3 className="font-bold text-indigo-800 border-b border-indigo-200 pb-2 mb-3">
-                        樣品清單 (共 {selectedRequest.samples?.length || 0} 件)
-                      </h3>
-                      <div className="space-y-2 max-h-[28vh] overflow-y-auto pr-2">
-                        {selectedRequest.samples?.map((s, idx) => (
-                          <div key={idx} className="bg-white p-3 rounded shadow-sm border border-gray-100 text-sm">
-                            <div className="flex justify-between items-center mb-1">
-                              <span className="font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded text-xs">#{idx + 1}</span>
-                              <span className="font-semibold text-gray-800">{s.code}</span>
-                            </div>
-                            <div className="flex flex-col text-xs text-gray-600 space-y-1 mt-2">
-                              <p>Solvent: <span className="text-gray-800">{s.solvent || '未填'}</span></p>
-                              <p>測試項目: <span className="text-gray-800">{s.test_items || '未填'}</span></p>
-                              <p className="break-words whitespace-normal">服務: <span className="text-indigo-700 font-medium">{s.service_item}</span></p>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* 右側：狀態追蹤與計費 */}
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">狀態追蹤</label>
-                      <select 
-                        value={selectedRequest.status} 
-                        onChange={(e) => setSelectedRequest({ ...selectedRequest, status: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-                      >
-                        <option value="未處理">未處理</option>
-                        <option value="已聯絡">已聯絡</option>
-                        <option value="處理中">處理中</option>
-                        <option value="已完成">已完成</option>
-                        <option value="已取消">已取消</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">管理員備註 (給Operator用)</label>
-                      <textarea 
-                        value={selectedRequest.admin_note || ''} 
-                        onChange={(e) => setSelectedRequest({ ...selectedRequest, admin_note: e.target.value })}
-                        rows={3}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-                        placeholder="紀錄處理進度或測量結果..."
-                      />
-                    </div>
-                    
-                    <div className="bg-gray-50 p-4 rounded-lg border">
-                      <h3 className="font-bold text-gray-700 mb-3 border-b pb-2 flex justify-between">
-                        費用計算 
-                        <span className="text-xs text-gray-400 font-normal mt-1">依服務種類分類</span>
-                      </h3>
-                      <div className="space-y-3 mb-4 max-h-[20vh] overflow-y-auto pr-2">
-                        {(selectedRequest.billing_details || []).map((bill, index) => (
-                          <div key={index} className="grid grid-cols-12 gap-2 items-center bg-white p-2 rounded border shadow-sm">
-                            <div className="col-span-5 text-sm font-bold text-indigo-700 truncate" title={bill.service_item}>
-                              {bill.service_item}
-                            </div>
-                            <div className="col-span-3">
-                              <input 
-                                type="number" 
-                                step="0.1" 
-                                placeholder="時數"
-                                value={bill.hours} 
-                                onChange={(e) => {
-                                  const newBilling = [...selectedRequest.billing_details];
-                                  newBilling[index].hours = e.target.value;
-                                  setSelectedRequest({...selectedRequest, billing_details: newBilling});
-                                }}
-                                className="w-full px-2 py-1 border rounded text-sm focus:ring-2 focus:ring-indigo-500"
-                              />
-                            </div>
-                            <div className="col-span-1 text-center text-gray-400 text-xs">x</div>
-                            <div className="col-span-3">
-                              <input 
-                                type="number" 
-                                placeholder="$ 費率"
-                                value={bill.rate} 
-                                onChange={(e) => {
-                                  const newBilling = [...selectedRequest.billing_details];
-                                  newBilling[index].rate = e.target.value;
-                                  setSelectedRequest({...selectedRequest, billing_details: newBilling});
-                                }}
-                                className="w-full px-2 py-1 border rounded text-sm focus:ring-2 focus:ring-indigo-500"
-                              />
-                            </div>
-                          </div>
-                        ))}
-                        {(!selectedRequest.billing_details || selectedRequest.billing_details.length === 0) && (
-                          <p className="text-sm text-gray-500 text-center py-2">無計算項目</p>
-                        )}
-                      </div>
-                      <div className="bg-indigo-600 p-3 rounded-lg flex justify-between items-center text-white shadow-inner">
-                        <span className="font-bold opacity-90">總花費金額</span>
-                        <span className="font-bold text-2xl">
-                          ${(selectedRequest.billing_details || []).reduce((sum, item) => sum + (Number(item.hours || 0) * Number(item.rate || 0)), 0)}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              
-              {/* === 底部按鈕區 (永遠固定在最下方) === */}
-              <div className="p-5 border-t border-gray-200 bg-gray-50 flex gap-3 rounded-b-xl flex-shrink-0">
-                <button onClick={() => setSelectedRequest(null)} className="flex-1 px-4 py-3 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition font-medium">取消 (不儲存返回)</button>
-                <button onClick={handleSaveModal} className="flex-1 px-4 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition font-medium shadow-md">確認儲存變更</button>
-              </div>
-
-            </div>
-          </div>
-        )}
-
-        {/* 編輯服務項目 Modal */}
-        {showServiceItemModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-            <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
-              <div className="flex justify-between items-center mb-4 border-b pb-2">
-                <h2 className="text-xl font-bold text-gray-800">編輯服務項目與預設金額</h2>
-                <button onClick={() => setShowServiceItemModal(false)} className="text-gray-500 hover:text-gray-700"><X className="w-5 h-5" /></button>
-              </div>
-              
-              <ul className="space-y-2 mb-6 max-h-[40vh] overflow-y-auto pr-2">
-                {serviceItems.map((item, index) => (
-                  <li 
-                    key={item.id} 
-                    draggable
-                    onDragStart={() => handleDragStart(index)}
-                    onDragEnter={() => handleDragEnter(index)}
-                    onDragEnd={handleDragEnd}
-                    onDragOver={(e) => e.preventDefault()}
-                    className={`flex justify-between items-center bg-gray-50 px-3 py-2 rounded-lg border gap-2 cursor-move ${draggedItemIndex === index ? 'opacity-50 border-indigo-300 border-dashed' : 'hover:bg-gray-100 transition-colors'}`}
-                  >
-                    <GripVertical className="w-4 h-4 text-gray-400 flex-shrink-0 cursor-grab" title="按住拖曳排序" />
-                    
-                    <input 
-                      type="text"
-                      defaultValue={item.name}
-                      onBlur={(e) => handleUpdateServiceName(item.id, e.target.value)}
-                      className="text-sm font-medium flex-1 bg-transparent border-b border-transparent hover:border-gray-300 focus:border-indigo-500 focus:bg-white outline-none px-1 py-0.5 transition-colors"
-                      title="點擊修改名稱，移開滑鼠自動儲存"
-                    />
-                    
-                    <div className="flex items-center gap-1 bg-white border rounded px-2 py-1 flex-shrink-0">
-                      <span className="text-xs text-gray-500">$</span>
-                      <input 
-                        type="number" 
-                        defaultValue={item.default_price || 100}
-                        onBlur={(e) => handleUpdateServicePrice(item.id, Number(e.target.value))}
-                        className="w-14 text-sm outline-none text-right font-semibold text-indigo-700"
-                        title="點擊修改金額，移開滑鼠自動儲存"
-                      />
-                    </div>
-                    
-                    <button 
-                      onClick={async () => {
-                        await supabase.from('service_items').delete().eq('id', item.id);
-                        loadServiceItems();
-                      }}
-                      className="text-red-400 hover:text-red-600 p-1 flex-shrink-0"
-                      title="刪除項目"
-                    ><Trash2 className="w-4 h-4" /></button>
-                  </li>
-                ))}
-              </ul>
-              
-              <div className="bg-indigo-50 p-4 rounded-lg border border-indigo-100">
-                <label className="block text-xs font-bold text-indigo-800 mb-2">新增服務項目</label>
-                <div className="flex gap-2">
-                  <input 
-                    type="text" 
-                    value={newServiceItemName} 
-                    onChange={(e) => setNewServiceItemName(e.target.value)} 
-                    placeholder="項目名稱..." 
-                    className="flex-1 px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-indigo-500"
-                  />
-                  <div className="flex items-center gap-1 bg-white border rounded-lg px-2">
-                    <span className="text-sm text-gray-500">$</span>
-                    <input 
-                      type="number" 
-                      value={newServiceItemPrice} 
-                      onChange={(e) => setNewServiceItemPrice(Number(e.target.value))} 
-                      className="w-16 py-2 text-sm outline-none"
-                    />
-                  </div>
-                  <button 
-                    onClick={async () => {
-                      if (!newServiceItemName) return;
-                      await supabase.from('service_items').insert([{ 
-                        name: newServiceItemName, 
-                        default_price: newServiceItemPrice,
-                        sort_order: serviceItems.length // 新增時自動排在最後面
-                      }]);
-                      setNewServiceItemName('');
-                      setNewServiceItemPrice(100);
-                      loadServiceItems();
-                    }}
-                    className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm font-medium shadow-sm flex-shrink-0"
-                  >新增</button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  }
-
   if (showAdminPanel && currentUser?.is_admin) {
     return (
       <div className="min-h-screen bg-gray-50">
@@ -2206,15 +1558,15 @@ if (!isLoggedIn) {
 <div className="max-w-7xl mx-auto p-4">
           <div className="bg-white rounded-lg shadow-sm p-6">
             
-            {/* === 新增：實驗室篩選下拉選單 === */}
-            <div className="mb-6 pb-4 border-b flex items-center gap-4">
-              <label className="text-sm font-bold text-gray-700">依實驗室篩選：</label>
-              <select 
-                value={filterLab} 
-                onChange={(e) => setFilterLab(e.target.value)}
-                className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm"
+            {/* 新增的 Lab 過濾選單 */}
+            <div className="mb-6 flex items-center gap-3 bg-gray-50 p-3 rounded-lg border border-gray-200 w-full md:w-1/2">
+              <label className="text-sm font-medium text-gray-700 whitespace-nowrap">過濾實驗室：</label>
+              <select
+                value={selectedLabFilter}
+                onChange={(e) => setSelectedLabFilter(e.target.value)}
+                className="w-full px-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm bg-white"
               >
-                <option value="">顯示所有實驗室</option>
+                <option value="">顯示全部用戶 (All)</option>
                 {labs.map(lab => (
                   <option key={lab.id} value={lab.name}>{lab.name} Lab</option>
                 ))}
@@ -2222,14 +1574,13 @@ if (!isLoggedIn) {
             </div>
 
             <div className="space-y-4">
-              {/* 修改：加入 .filter() 邏輯 */}
               {users
-  .filter(user => !filterLab || user.pi === filterLab)
-  .map(user => (
-  <div key={user.id} className={`border rounded-lg p-4 ${!user.active ? 'bg-gray-100' : 'bg-white'}`}>
-    <div className="flex justify-between items-start mb-3">
-      <div className="flex-1">
-        <div className="flex items-center gap-2">
+                .filter(user => selectedLabFilter === '' || user.pi === selectedLabFilter)
+                .map(user => (
+                <div key={user.id} className={`border rounded-lg p-4 ${!user.active ? 'bg-gray-50 opacity-75' : ''}`}>
+                  <div className="flex justify-between items-start mb-3">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
                         <p className="font-semibold text-lg">{user.display_name}</p>
                         {user.active === false && <span className="px-2 py-1 bg-red-100 text-red-700 text-xs rounded-full">已停用</span>}
                         {user.active !== false && <span className="px-2 py-1 bg-green-100 text-green-700 text-xs rounded-full">已啟用</span>}
@@ -2298,16 +1649,6 @@ if (!isLoggedIn) {
               </div>
               {currentUser?.is_admin && (
                 <>
-                  <button onClick={() => setShowExternalPanel(true)} className="flex items-center gap-2 px-3 py-2 bg-yellow-100 text-yellow-800 rounded-lg hover:bg-yellow-200 transition text-sm relative">
-                    <ClipboardList className="w-4 h-4" />
-                    校外委託管理
-                    {externalRequests.filter(r => r.status === '未處理').length > 0 && (
-                      <span className="absolute -top-1 -right-1 flex h-3 w-3">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                        <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
-                      </span>
-                    )}
-                  </button>
                   <button onClick={() => setShowAdminPanel(true)} className="flex items-center gap-2 px-3 py-2 bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 transition text-sm"><Settings className="w-4 h-4" />用戶管理</button>
                   <button onClick={() => setShowHistoryNotice(true)} className="flex items-center gap-2 px-3 py-2 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 transition text-sm"><Calendar className="w-4 h-4" />歷史記錄</button>
                   <button onClick={() => setShowTimeSlotPanel(true)} className="flex items-center gap-2 px-3 py-2 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition text-sm"><Clock className="w-4 h-4" />時段設定</button>
