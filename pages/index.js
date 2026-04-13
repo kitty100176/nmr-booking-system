@@ -1307,19 +1307,25 @@ if (!isLoggedIn) {
                               <X className="w-3 h-3" />
                             </button>
                           )}
-                            <div className="grid grid-cols-2 gap-3 mb-2">
+                          {/* 第一排：Solvent 與 編碼並排 (較短的資訊) */}
+                          <div className="grid grid-cols-2 gap-3 mb-3">
                             <div><label className="block text-xs font-medium text-gray-700 mb-1">D-Solvent</label><input type="text" value={sample.solvent} onChange={(e) => handleSampleChange(index, 'solvent', e.target.value)} className="w-full px-2 py-1.5 border border-gray-300 rounded focus:ring-1 focus:ring-indigo-500 text-sm" placeholder="例如: CDCl3" /></div>
                             <div><label className="block text-xs font-medium text-gray-700 mb-1">編碼 *</label><input type="text" value={sample.code} onChange={(e) => handleSampleChange(index, 'code', e.target.value)} className="w-full px-2 py-1.5 border border-gray-300 rounded focus:ring-1 focus:ring-indigo-500 text-sm" placeholder="樣品編號" /></div>
                           </div>
-                          <div className="grid grid-cols-2 gap-3 mb-2">
-                            <div><label className="block text-xs font-medium text-gray-700 mb-1">測試項目</label><input type="text" value={sample.test_items || ''} onChange={(e) => handleSampleChange(index, 'test_items', e.target.value)} className="w-full px-2 py-1.5 border border-gray-300 rounded focus:ring-1 focus:ring-indigo-500 text-sm" placeholder="例如: 1H, 13C" /></div>
-                            <div>
-                              <label className="block text-xs font-medium text-gray-700 mb-1">服務項目 *</label>
-                              <select value={sample.service_item} onChange={(e) => handleSampleChange(index, 'service_item', e.target.value)} className="w-full px-2 py-1.5 border border-gray-300 rounded focus:ring-1 focus:ring-indigo-500 text-sm">
-                                <option value="">請選擇服務項目</option>
-                                {serviceItems.map(item => (<option key={item.id} value={item.name}>{item.name}</option>))}
-                              </select>
-                            </div>
+                          
+                          {/* 第二排：測試項目 (給予完整寬度) */}
+                          <div className="mb-3">
+                            <label className="block text-xs font-medium text-gray-700 mb-1">測試項目</label>
+                            <input type="text" value={sample.test_items || ''} onChange={(e) => handleSampleChange(index, 'test_items', e.target.value)} className="w-full px-2 py-1.5 border border-gray-300 rounded focus:ring-1 focus:ring-indigo-500 text-sm" placeholder="例如: 1H, 13C (若有多項請用逗號分隔)" />
+                          </div>
+
+                          {/* 第三排：服務項目 (給予完整寬度，解決字太多被卡住的問題) */}
+                          <div>
+                            <label className="block text-xs font-medium text-gray-700 mb-1">服務項目 *</label>
+                            <select value={sample.service_item} onChange={(e) => handleSampleChange(index, 'service_item', e.target.value)} className="w-full px-2 py-1.5 border border-gray-300 rounded focus:ring-1 focus:ring-indigo-500 text-sm">
+                              <option value="">請選擇服務項目</option>
+                              {serviceItems.map(item => (<option key={item.id} value={item.name}>{item.name}</option>))}
+                            </select>
                           </div>
                         </div>
                       ))}
@@ -1987,7 +1993,7 @@ if (!isLoggedIn) {
                             <div className="flex flex-col text-xs text-gray-600 space-y-1 mt-2">
                               <p>Solvent: <span className="text-gray-800">{s.solvent || '未填'}</span></p>
                               <p>測試項目: <span className="text-gray-800">{s.test_items || '未填'}</span></p>
-                              <p>服務: <span className="text-indigo-700 font-medium">{s.service_item}</span></p>
+                              <p className="break-words whitespace-normal">服務: <span className="text-indigo-700 font-medium">{s.service_item}</span></p>
                             </div>
                           </div>
                         ))}
