@@ -722,6 +722,10 @@ try {
 
 // === 違規事項相關函式 ===
 // 打開彈窗並載入現有資料與歷史紀錄
+
+// === 違規事項相關函式 ===
+  
+  // 打開彈窗並載入現有資料與歷史紀錄
   const openViolationModal = (user) => {
     setCurrentViolationUser(user);
     setViolationText(user.violation_log || '');
@@ -732,18 +736,60 @@ try {
     setShowViolationModal(true);
   };
 
-const handleApplyPreset = (reason, days) => {
+  // 快速套用處罰模板
+  const handleApplyPreset = (reason, days) => {
+    const now = new Date();
+    const end = new Date(now.getTime() + days * 24 * 60 * 60 * 1000);
+    
+    // 修正時區偏移，轉成 datetime-local 需要的 YYYY-MM-DDThh:mm 格式
+    const toLocalString = (dateObj) => {
+      const d = new Date(dateObj);
+      d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+      return d.toISOString().slice(0, 16);
+    };
 
+    setViolationReason(reason);
+    setPenaltyStart(toLocalString(now));
+    setPenaltyEnd(toLocalString(end));
+  };
+
+  // 一鍵解除處罰 (清空欄位)
+  const handleClearPenalty = () => {
+    setViolationReason('');
+    setPenaltyStart('');
+    setPenaltyEnd('');
+    setViolationText('');
+  };
+
+  // 儲存並自動追加到歷史紀錄
   const handleSaveViolation = async () => {
     if (!currentViolationUser) return;
     try {
+      let updatedHistory = [...(violationHistory || [])];
+      
+      // 如果有填寫違規事項與時間，將此筆紀錄打包加入歷史紀錄陣列的最前方
+      if (violationReason && penaltyStart && penaltyEnd) {
+        const newRecord = {
+          reason: violationReason,
+          start: penaltyStart,
+          end: penaltyEnd,
+          note: violationText,
+          saved_at: new Date().toISOString()
+        };
+        // 防呆：避免連續點擊存入重複的最新紀錄
+        if (updatedHistory.length === 0 || updatedHistory[0].start !== penaltyStart) {
+            updatedHistory = [newRecord, ...updatedHistory];
+        }
+      }
+
       const { error } = await supabase
         .from('users')
         .update({ 
           violation_log: violationText,
           violation_reason: violationReason,
           penalty_start: penaltyStart || null,
-          penalty_end: penaltyEnd || null
+          penalty_end: penaltyEnd || null,
+          violation_history: updatedHistory
         })
         .eq('id', currentViolationUser.id);
       
@@ -758,6 +804,7 @@ const handleApplyPreset = (reason, days) => {
       alert('儲存失敗，請稍後再試');
     }
   };
+
   // === 計費相關輔助元件 (包含連續優惠邏輯 + 修正為小數點 2 位) ===
   const BillingModal = () => {
     
