@@ -766,19 +766,7 @@ const handleSelectPreset = (e) => {
     
     setPenaltyStart(toLocalISO(now));
     setPenaltyEnd(toLocalISO(end));
-  };
-    
-    // 修正時區偏移，轉成 datetime-local 需要的 YYYY-MM-DDThh:mm 格式
-    const toLocalString = (dateObj) => {
-      const d = new Date(dateObj);
-      d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
-      return d.toISOString().slice(0, 16);
-    };
-
-    setViolationReason(reason);
-    setPenaltyStart(toLocalString(now));
-    setPenaltyEnd(toLocalString(end));
-  };
+  };   
 
   // 一鍵解除處罰 (清空欄位)
   const handleClearPenalty = () => {
