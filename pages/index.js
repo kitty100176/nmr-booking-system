@@ -208,34 +208,35 @@ export default function NMRBookingSystem() {
     }
   }, [showHistoryPanel, selectedMonth, loadHistoryBookings]);
 
-const loadSystemSettings = async () => {
+// 載入系統設定時，一併載入處罰清單
+  const loadSystemSettings = async () => {
     try {
-      const { data, error } = await supabase
-        .from('system_settings')
-        .select('*')
-        .eq('id', 1)
-        .single();
+      const { data, error } = await supabase.from('system_settings').select('*').eq('id', 1).single();
       if (data) {
         setSystemSettings(data);
         if (data.hourly_rate) setHourlyRate(data.hourly_rate);
-        // --- 新增這行：載入自訂模板 ---
+        // [關鍵] 載入您設定的處罰事項
         if (data.violation_presets) setViolationPresets(data.violation_presets);
-      } else {
-        const defaultSettings = {
-          rule1: '請提前預約所需時段，系統開放預約未來時段',
-          rule2: '不可預約或取消已過去的時間',
-          rule3: '預約時間粒度為15分鐘（09:00-18:00）及30分鐘（18:00-09:00）',
-          rule4: '請準時使用儀器，並保持儀器清潔',
-          rule5: '使用前請確認已通過該儀器操作訓練',
-          rule6: '如有問題請聯絡管理員',
-          rule7: '',
-          hourly_rate: 100
-        };
-        setSystemSettings(defaultSettings);
       }
-    } catch (error) {
-      console.error('載入系統設定失敗:', error);
-    }
+    } catch (error) { console.error('載入設定失敗:', error); }
+  };
+
+  // 儲存設定時，把清單存回資料庫
+  const handleSaveSettings = async () => {
+    if (!systemSettings) return;
+    try {
+      const updateData = {
+        rule1: systemSettings.rule1, rule2: systemSettings.rule2,
+        rule3: systemSettings.rule3, rule4: systemSettings.rule4,
+        rule5: systemSettings.rule5, rule6: systemSettings.rule6,
+        rule7: systemSettings.rule7, hourly_rate: hourlyRate,
+        // [關鍵] 儲存處罰事項
+        violation_presets: violationPresets 
+      };
+      const { error } = await supabase.from('system_settings').update(updateData).eq('id', 1);
+      if (error) throw error;
+      alert('設定已儲存！');
+    } catch (error) { alert('儲存失敗'); }
   };
 
   const loadTimeSlotSettings = async () => {
@@ -745,10 +746,27 @@ try {
     setShowViolationModal(true);
   };
 
-  // 快速套用處罰模板
-  const handleApplyPreset = (reason, days) => {
+const handleSelectPreset = (e) => {
+    const selectedIndex = e.target.value;
+    if (selectedIndex === "manual") return;
+    
+    const preset = violationPresets[selectedIndex];
+    if (!preset) return;
+
+    setViolationReason(preset.reason);
+    
+    // 計算處罰時間 (現在時間 ~ N 天後)
     const now = new Date();
-    const end = new Date(now.getTime() + days * 24 * 60 * 60 * 1000);
+    const end = new Date(now.getTime() + preset.days * 24 * 60 * 60 * 1000);
+    
+    const toLocalISO = (date) => {
+      const offset = date.getTimezoneOffset() * 60000;
+      return new Date(date - offset).toISOString().slice(0, 16);
+    };
+    
+    setPenaltyStart(toLocalISO(now));
+    setPenaltyEnd(toLocalISO(end));
+  };
     
     // 修正時區偏移，轉成 datetime-local 需要的 YYYY-MM-DDThh:mm 格式
     const toLocalString = (dateObj) => {
@@ -1280,12 +1298,6 @@ try {
   }
 
 if (showViolationModal && currentViolationUser) {
-    // 定義下拉選單的預設選項
-    const PREDEFINED_REASONS = ['預約未到', '未確實清潔儀器', '未確實填寫紀錄', '超時使用儀器', '儀器損毀'];
-    
-    // 判斷當前的違規事項是否屬於自訂輸入
-    const isCustomReason = violationReason && !PREDEFINED_REASONS.includes(violationReason);
-
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
         <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full p-6 border-t-4 border-yellow-500 max-h-[90vh] flex flex-col">
@@ -1310,37 +1322,26 @@ if (showViolationModal && currentViolationUser) {
             <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200 space-y-4">
               <h3 className="font-bold text-yellow-800 border-b border-yellow-200 pb-2">當前處罰設定</h3>
               
-              {/* 下拉式選單區塊 */}
+              {/* 下拉式選單區塊 (從系統設定動態讀取) */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">違規事項 (對用戶顯示)</label>
-                <select
-                  value={PREDEFINED_REASONS.includes(violationReason) ? violationReason : (violationReason ? '其他' : '')}
-                  onChange={(e) => {
-                    if (e.target.value !== '其他') {
-                      setViolationReason(e.target.value);
-                    } else {
-                      setViolationReason(' '); // 給一個空格來觸發自訂輸入框
-                    }
-                  }}
+                <label className="block text-sm font-medium text-gray-700 mb-1">選擇處罰事項 (從系統設定讀取)</label>
+                <select 
+                  onChange={handleSelectPreset}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 bg-white mb-2"
                 >
-                  <option value="" disabled>請選擇違規事項...</option>
-                  {PREDEFINED_REASONS.map(reason => (
-                    <option key={reason} value={reason}>{reason}</option>
+                  <option value="manual">-- 請選擇或手動輸入 --</option>
+                  {violationPresets && violationPresets.map((preset, index) => (
+                    <option key={index} value={index}>{preset.reason} (停權 {preset.days} 天)</option>
                   ))}
-                  <option value="其他">其他 (手動輸入)...</option>
                 </select>
-
-                {/* 如果選擇了「其他」或原本是手動輸入，就顯示這個文字框 */}
-                {isCustomReason && (
-                  <input 
-                    type="text" 
-                    value={violationReason.trim()} 
-                    onChange={(e) => setViolationReason(e.target.value)} 
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 bg-white" 
-                    placeholder="請輸入詳細違規事項..."
-                  />
-                )}
+                
+                <input 
+                  type="text" 
+                  value={violationReason} 
+                  onChange={(e) => setViolationReason(e.target.value)} 
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 bg-white" 
+                  placeholder="手動輸入或修改違規事項內容..."
+                />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
@@ -1567,19 +1568,19 @@ if (showSettingsPanel && currentUser?.is_admin) {
             {/* 右側：預覽與自訂處罰模板 */}
             <div className="space-y-6 lg:sticky lg:top-20 lg:self-start">
               
-              {/* 自訂處罰模板區塊 */}
+{/* 自訂處罰模板區塊 */}
               <div className="bg-white rounded-lg shadow-sm p-6">
-                <h2 className="text-xl font-bold mb-2">自訂處罰模板</h2>
-                <p className="text-sm text-gray-600 mb-4">設定違規視窗中的「快速套用按鈕」</p>
+                <h2 className="text-xl font-bold mb-2">處罰事項管理</h2>
+                <p className="text-sm text-gray-600 mb-4">設定後，違規視窗的下拉選單就會自動出現對應選項</p>
                 
                 {/* 新增模板輸入框 */}
                 <div className="flex gap-2 mb-4 bg-gray-50 p-3 rounded-lg border border-gray-200">
-                  <input type="text" value={newPresetReason} onChange={(e)=>setNewPresetReason(e.target.value)} placeholder="違規事項 (例: 遲到)" className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm" />
-                  <input type="number" value={newPresetDays} onChange={(e)=>setNewPresetDays(e.target.value)} placeholder="天數" min="1" className="w-20 px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+                  <input type="text" value={newPresetReason} onChange={(e)=>setNewPresetReason(e.target.value)} placeholder="違規名稱 (例: 預約未到)" className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+                  <input type="number" value={newPresetDays} onChange={(e)=>setNewPresetDays(e.target.value)} placeholder="停權天數" min="1" className="w-24 px-3 py-2 border border-gray-300 rounded-lg text-sm" />
                   <button 
                     onClick={() => {
                       if(newPresetReason && newPresetDays) {
-                        setViolationPresets([...violationPresets, { reason: newPresetReason, days: parseInt(newPresetDays) }]);
+                        setViolationPresets([...(violationPresets || []), { reason: newPresetReason, days: parseInt(newPresetDays) }]);
                         setNewPresetReason(''); setNewPresetDays('');
                       }
                     }} 
@@ -1590,17 +1591,17 @@ if (showSettingsPanel && currentUser?.is_admin) {
 
                 {/* 現有模板列表 */}
                 <div className="space-y-2">
-                  {violationPresets.map((preset, index) => (
-                    <div key={index} className="flex justify-between items-center px-3 py-2 bg-orange-50 text-orange-800 rounded-lg border border-orange-100">
-                      <span className="text-sm font-medium">{preset.reason} (停用 {preset.days} 天)</span>
-                      <button onClick={() => setViolationPresets(violationPresets.filter((_, i) => i !== index))} className="text-red-500 hover:text-red-700 p-1">
+                  {violationPresets && violationPresets.map((preset, index) => (
+                    <div key={index} className="flex justify-between items-center px-3 py-2 bg-white border border-gray-200 rounded-lg shadow-sm">
+                      <span className="text-sm font-medium text-gray-800">{preset.reason} (停權 {preset.days} 天)</span>
+                      <button onClick={() => setViolationPresets(violationPresets.filter((_, i) => i !== index))} className="text-red-500 hover:text-red-700 p-1 bg-red-50 rounded">
                         <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
                   ))}
-                  {violationPresets.length === 0 && <p className="text-sm text-gray-500 text-center py-2">目前無自訂模板</p>}
+                  {(!violationPresets || violationPresets.length === 0) && <p className="text-sm text-gray-500 text-center py-2">目前無自訂處罰事項</p>}
                 </div>
-                <p className="text-xs text-red-500 mt-4 font-medium">* 編輯或新增模板後，請務必點擊左下方「儲存所有設定」按鈕寫入資料庫。</p>
+                <p className="text-xs text-red-500 mt-4 font-medium">* 編輯或新增項目後，請務必點擊左下方「儲存所有設定」按鈕寫入資料庫。</p>
               </div>
 
               {/* 規則預覽區塊 */}
