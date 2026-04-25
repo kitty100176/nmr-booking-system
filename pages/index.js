@@ -1280,6 +1280,12 @@ try {
   }
 
 if (showViolationModal && currentViolationUser) {
+    // 定義下拉選單的預設選項
+    const PREDEFINED_REASONS = ['預約未到', '未確實清潔儀器', '未確實填寫紀錄', '超時使用儀器', '儀器損毀'];
+    
+    // 判斷當前的違規事項是否屬於自訂輸入
+    const isCustomReason = violationReason && !PREDEFINED_REASONS.includes(violationReason);
+
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
         <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full p-6 border-t-4 border-yellow-500 max-h-[90vh] flex flex-col">
@@ -1300,24 +1306,43 @@ if (showViolationModal && currentViolationUser) {
               <p className="text-sm text-gray-500">Lab: {currentViolationUser.pi}</p>
             </div>
 
-            {/* 快速按鈕區 (一鍵套用) */}
-            <div className="space-y-2">
-              <label className="block text-sm font-bold text-gray-700">⚡ 快速套用模板</label>
-              <div className="flex flex-wrap gap-2">
-                <button onClick={() => handleApplyPreset('預約未到', 7)} className="px-3 py-1.5 bg-orange-100 text-orange-700 text-sm rounded hover:bg-orange-200 transition">預約未到 (停用 7 天)</button>
-                <button onClick={() => handleApplyPreset('未清潔儀器', 3)} className="px-3 py-1.5 bg-orange-100 text-orange-700 text-sm rounded hover:bg-orange-200 transition">未清潔儀器 (停用 3 天)</button>
-                <button onClick={() => handleApplyPreset('嚴重違規', 30)} className="px-3 py-1.5 bg-red-100 text-red-700 text-sm rounded hover:bg-red-200 transition">嚴重違規 (停用 30 天)</button>
-                <button onClick={handleClearPenalty} className="px-3 py-1.5 bg-green-100 text-green-700 text-sm rounded hover:bg-green-200 transition ml-auto">解除 / 清空處罰</button>
-              </div>
-            </div>
-
             {/* 當前處罰設定 */}
             <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200 space-y-4">
               <h3 className="font-bold text-yellow-800 border-b border-yellow-200 pb-2">當前處罰設定</h3>
+              
+              {/* 下拉式選單區塊 */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">違規事項 (對用戶顯示)</label>
-                <input type="text" value={violationReason} onChange={(e) => setViolationReason(e.target.value)} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 bg-white" placeholder="自訂違規事項或點擊上方模板..."/>
+                <select
+                  value={PREDEFINED_REASONS.includes(violationReason) ? violationReason : (violationReason ? '其他' : '')}
+                  onChange={(e) => {
+                    if (e.target.value !== '其他') {
+                      setViolationReason(e.target.value);
+                    } else {
+                      setViolationReason(' '); // 給一個空格來觸發自訂輸入框
+                    }
+                  }}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 bg-white mb-2"
+                >
+                  <option value="" disabled>請選擇違規事項...</option>
+                  {PREDEFINED_REASONS.map(reason => (
+                    <option key={reason} value={reason}>{reason}</option>
+                  ))}
+                  <option value="其他">其他 (手動輸入)...</option>
+                </select>
+
+                {/* 如果選擇了「其他」或原本是手動輸入，就顯示這個文字框 */}
+                {isCustomReason && (
+                  <input 
+                    type="text" 
+                    value={violationReason.trim()} 
+                    onChange={(e) => setViolationReason(e.target.value)} 
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 bg-white" 
+                    placeholder="請輸入詳細違規事項..."
+                  />
+                )}
               </div>
+
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">處罰開始時間</label>
@@ -1328,6 +1353,7 @@ if (showViolationModal && currentViolationUser) {
                   <input type="datetime-local" value={penaltyEnd} onChange={(e) => setPenaltyEnd(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 text-sm bg-white"/>
                 </div>
               </div>
+              
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">內部備註 (僅管理員可見)</label>
                 <textarea value={violationText} onChange={(e) => setViolationText(e.target.value)} rows={2} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 bg-white" placeholder="詳細情況..."/>
@@ -1358,7 +1384,9 @@ if (showViolationModal && currentViolationUser) {
             </div>
           </div>
 
+          {/* 底部按鈕區 */}
           <div className="flex gap-3 mt-4 pt-4 border-t flex-shrink-0">
+            <button onClick={handleClearPenalty} className="px-4 py-3 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition font-medium">解除 / 清空</button>
             <button onClick={() => setShowViolationModal(false)} className="flex-1 px-4 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition font-medium">取消</button>
             <button onClick={handleSaveViolation} className="flex-1 px-4 py-3 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition font-medium flex items-center justify-center gap-2 shadow-lg shadow-yellow-200">
               <Save className="w-4 h-4" />
