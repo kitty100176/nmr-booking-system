@@ -58,6 +58,11 @@ export default function NMRBookingSystem() {
   const [selectedLabFilter, setSelectedLabFilter] = useState('');
   // ======================
 
+// --- 新增以下三個狀態 ---
+  const [violationReason, setViolationReason] = useState(''); 
+  const [penaltyStart, setPenaltyStart] = useState('');
+  const [penaltyEnd, setPenaltyEnd] = useState('');
+
   const INSTRUMENTS = ['60', '500'];
 
   // 生成時段
@@ -268,17 +273,33 @@ export default function NMRBookingSystem() {
       return;
     }
 
-    try {
+try {
       const { data, error } = await supabase
         .from('users')
         .select('*')
         .eq('username', loginForm.username)
         .eq('password', loginForm.password)
         .single();
+
       if (error || !data) {
         alert('帳號或密碼錯誤\nIncorrect account or password');
         return;
       }
+
+      // --- [新增] 自動處罰判定邏輯 ---
+      if (data.penalty_start && data.penalty_end) {
+        const now = new Date();
+        const start = new Date(data.penalty_start);
+        const end = new Date(data.penalty_end);
+        
+        // 如果現在時間介於處罰開始與結束之間，則拒絕登入
+        if (now >= start && now <= end) {
+          const options = { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' };
+          alert(`⛔ 此帳號因「${data.violation_reason || '違規事項'}」暫停使用。\n\n處罰期間：\n${start.toLocaleString('zh-TW', options)} 至 ${end.toLocaleString('zh-TW', options)}`);
+          return;
+        }
+      }
+      // -----------------------------
 
       if (data.active === false) {
         alert('此帳號已被停用，請聯絡管理員\nThis account has been disabled, please contact administrator');
@@ -698,10 +719,14 @@ export default function NMRBookingSystem() {
     return bookings.find(b => b.time_slot === timeSlot);
   };
 
-  // === 違規事項相關函式 ===
+// === 違規事項相關函式 ===
   const openViolationModal = (user) => {
     setCurrentViolationUser(user);
     setViolationText(user.violation_log || '');
+    setViolationReason(user.violation_reason || '');
+    // 轉換資料庫的 ISO 時間格式以符合 datetime-local 選擇器
+    setPenaltyStart(user.penalty_start ? user.penalty_start.slice(0, 16) : '');
+    setPenaltyEnd(user.penalty_end ? user.penalty_end.slice(0, 16) : '');
     setShowViolationModal(true);
   };
 
@@ -710,12 +735,17 @@ export default function NMRBookingSystem() {
     try {
       const { error } = await supabase
         .from('users')
-        .update({ violation_log: violationText })
+        .update({ 
+          violation_log: violationText,
+          violation_reason: violationReason,
+          penalty_start: penaltyStart || null,
+          penalty_end: penaltyEnd || null
+        })
         .eq('id', currentViolationUser.id);
       
       if (error) throw error;
       
-      alert('違規事項已儲存');
+      alert('違規與處罰設定已儲存');
       setShowViolationModal(false);
       setCurrentViolationUser(null);
       await loadUsers();
@@ -724,7 +754,6 @@ export default function NMRBookingSystem() {
       alert('儲存失敗，請稍後再試');
     }
   };
-
   // === 計費相關輔助元件 (包含連續優惠邏輯 + 修正為小數點 2 位) ===
   const BillingModal = () => {
     
@@ -1190,39 +1219,75 @@ export default function NMRBookingSystem() {
     );
   }
 
-  if (showViolationModal && currentViolationUser) {
+if (showViolationModal && currentViolationUser) {
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-        <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full p-6 border-t-4 border-yellow-500">
+        <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full p-6 border-t-4 border-yellow-500 max-h-[90vh] overflow-y-auto">
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
               <FileWarning className="w-6 h-6 text-yellow-600" />
-              違規紀錄筆記本
+              違規與處罰管理
             </h2>
             <button onClick={() => setShowViolationModal(false)} className="text-gray-500 hover:text-gray-700">
               <X className="w-6 h-6" />
             </button>
           </div>
-          <div className="mb-4">
-            <p className="text-gray-700 font-medium">用戶: {currentViolationUser.display_name} ({currentViolationUser.username})</p>
+          
+          <div className="mb-4 bg-gray-50 p-3 rounded-lg border border-gray-200">
+            <p className="text-gray-800 font-medium">用戶: {currentViolationUser.display_name} ({currentViolationUser.username})</p>
             <p className="text-sm text-gray-500">Lab: {currentViolationUser.pi}</p>
           </div>
+
           <div className="space-y-4">
-            <label className="block text-sm font-medium text-gray-700">違規事項紀錄</label>
-            <textarea
-              value={violationText}
-              onChange={(e) => setViolationText(e.target.value)}
-              rows={8}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500"
-              placeholder="在此輸入違規事項、日期與原因..."
-            />
-            <p className="text-xs text-gray-500">此紀錄僅供管理員查看，不會顯示給用戶。</p>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">違規事項 (對用戶顯示)</label>
+              <input
+                type="text"
+                value={violationReason}
+                onChange={(e) => setViolationReason(e.target.value)}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500"
+                placeholder="例如：預約未到、未清潔儀器..."
+              />
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">處罰開始時間</label>
+                <input
+                  type="datetime-local"
+                  value={penaltyStart}
+                  onChange={(e) => setPenaltyStart(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">處罰結束時間</label>
+                <input
+                  type="datetime-local"
+                  value={penaltyEnd}
+                  onChange={(e) => setPenaltyEnd(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 text-sm"
+                />
+              </div>
+            </div>
+
+            <div className="pt-2">
+              <label className="block text-sm font-medium text-gray-700 mb-1">備註 (僅管理員可見)</label>
+              <textarea
+                value={violationText}
+                onChange={(e) => setViolationText(e.target.value)}
+                rows={4}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500"
+                placeholder="在此記錄詳細的違規情況或處置討論..."
+              />
+            </div>
           </div>
+
           <div className="flex gap-3 mt-6">
             <button onClick={() => setShowViolationModal(false)} className="flex-1 px-4 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition font-medium">取消</button>
             <button onClick={handleSaveViolation} className="flex-1 px-4 py-3 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition font-medium flex items-center justify-center gap-2 shadow-lg shadow-yellow-200">
               <Save className="w-4 h-4" />
-              儲存紀錄
+              儲存設定
             </button>
           </div>
         </div>
