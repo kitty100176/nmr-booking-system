@@ -221,23 +221,6 @@ export default function NMRBookingSystem() {
     } catch (error) { console.error('載入設定失敗:', error); }
   };
 
-  // 儲存設定時，把清單存回資料庫
-  const handleSaveSettings = async () => {
-    if (!systemSettings) return;
-    try {
-      const updateData = {
-        rule1: systemSettings.rule1, rule2: systemSettings.rule2,
-        rule3: systemSettings.rule3, rule4: systemSettings.rule4,
-        rule5: systemSettings.rule5, rule6: systemSettings.rule6,
-        rule7: systemSettings.rule7, hourly_rate: hourlyRate,
-        // [關鍵] 儲存處罰事項
-        violation_presets: violationPresets 
-      };
-      const { error } = await supabase.from('system_settings').update(updateData).eq('id', 1);
-      if (error) throw error;
-      alert('設定已儲存！');
-    } catch (error) { alert('儲存失敗'); }
-  };
 
   const loadTimeSlotSettings = async () => {
     try {
