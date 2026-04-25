@@ -714,22 +714,27 @@ try {
   };
 
 // === 違規事項相關函式 ===
-// 打開彈窗並載入現有資料與歷史紀錄
-
-// === 違規事項相關函式 ===
   
-  // 打開彈窗並載入現有資料與歷史紀錄
   const openViolationModal = (user) => {
     setCurrentViolationUser(user);
     setViolationText(user.violation_log || '');
     setViolationReason(user.violation_reason || '');
-    setPenaltyStart(user.penalty_start ? user.penalty_start.slice(0, 16) : '');
-    setPenaltyEnd(user.penalty_end ? user.penalty_end.slice(0, 16) : '');
-    setViolationHistory(user.violation_history || []); // 載入歷史紀錄
+    
+    // 修正1：將資料庫的 UTC 時間轉為台灣本地時間給介面顯示
+    const formatLocal = (dbDateStr) => {
+      if (!dbDateStr) return '';
+      const d = new Date(dbDateStr);
+      const offset = d.getTimezoneOffset() * 60000;
+      return new Date(d - offset).toISOString().slice(0, 16);
+    };
+
+    setPenaltyStart(formatLocal(user.penalty_start));
+    setPenaltyEnd(formatLocal(user.penalty_end));
+    setViolationHistory(user.violation_history || []);
     setShowViolationModal(true);
   };
 
-const handleSelectPreset = (e) => {
+  const handleSelectPreset = (e) => {
     const selectedIndex = e.target.value;
     if (selectedIndex === "manual") return;
     
@@ -738,7 +743,6 @@ const handleSelectPreset = (e) => {
 
     setViolationReason(preset.reason);
     
-    // 計算處罰時間 (現在時間 ~ N 天後)
     const now = new Date();
     const end = new Date(now.getTime() + preset.days * 24 * 60 * 60 * 1000);
     
@@ -749,9 +753,8 @@ const handleSelectPreset = (e) => {
     
     setPenaltyStart(toLocalISO(now));
     setPenaltyEnd(toLocalISO(end));
-  };   
+  };
 
-  // 一鍵解除處罰 (清空欄位)
   const handleClearPenalty = () => {
     setViolationReason('');
     setPenaltyStart('');
@@ -759,22 +762,23 @@ const handleSelectPreset = (e) => {
     setViolationText('');
   };
 
-  // 儲存並自動追加到歷史紀錄
   const handleSaveViolation = async () => {
     if (!currentViolationUser) return;
     try {
       let updatedHistory = [...(violationHistory || [])];
       
-      // 如果有填寫違規事項與時間，將此筆紀錄打包加入歷史紀錄陣列的最前方
+      // 修正2：將介面上的本地時間轉回標準時間存入資料庫，解決 8 小時時差
+      const saveStart = penaltyStart ? new Date(penaltyStart).toISOString() : null;
+      const saveEnd = penaltyEnd ? new Date(penaltyEnd).toISOString() : null;
+      
       if (violationReason && penaltyStart && penaltyEnd) {
         const newRecord = {
           reason: violationReason,
-          start: penaltyStart,
+          start: penaltyStart, // 這裡保留本地時間字串給紀錄看
           end: penaltyEnd,
           note: violationText,
           saved_at: new Date().toISOString()
         };
-        // 防呆：避免連續點擊存入重複的最新紀錄
         if (updatedHistory.length === 0 || updatedHistory[0].start !== penaltyStart) {
             updatedHistory = [newRecord, ...updatedHistory];
         }
@@ -785,8 +789,8 @@ const handleSelectPreset = (e) => {
         .update({ 
           violation_log: violationText,
           violation_reason: violationReason,
-          penalty_start: penaltyStart || null,
-          penalty_end: penaltyEnd || null,
+          penalty_start: saveStart,
+          penalty_end: saveEnd,
           violation_history: updatedHistory
         })
         .eq('id', currentViolationUser.id);
@@ -1762,12 +1766,23 @@ if (showSettingsPanel && currentUser?.is_admin) {
                 <div key={user.id} className={`border rounded-lg p-4 ${!user.active ? 'bg-gray-50 opacity-75' : ''}`}>
                   <div className="flex justify-between items-start mb-3">
                     <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <p className="font-semibold text-lg">{user.display_name}</p>
-                        {user.active === false && <span className="px-2 py-1 bg-red-100 text-red-700 text-xs rounded-full">已停用</span>}
-                        {user.active !== false && <span className="px-2 py-1 bg-green-100 text-green-700 text-xs rounded-full">已啟用</span>}
-                        {user.is_admin && <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-full">管理員</span>}
-                      </div>
+<div className="flex items-center gap-2">
+  <p className="font-semibold text-lg">{user.display_name}</p>
+  {(() => {
+    const now = new Date();
+    const pStart = user.penalty_start ? new Date(user.penalty_start) : null;
+    const pEnd = user.penalty_end ? new Date(user.penalty_end) : null;
+    const isPenalized = pStart && pEnd && now >= pStart && now <= pEnd;
+
+    // 依序判斷：如果在處罰時間內 -> 顯示黃色「停權中」
+    if (isPenalized) return <span className="px-2 py-1 bg-yellow-100 text-yellow-800 text-xs rounded-full font-bold">停權中</span>;
+    // 若被手動關閉 -> 顯示紅色「已停用」
+    if (user.active === false) return <span className="px-2 py-1 bg-red-100 text-red-700 text-xs rounded-full">已停用</span>;
+    // 正常狀態 -> 顯示綠色「已啟用」
+    return <span className="px-2 py-1 bg-green-100 text-green-700 text-xs rounded-full">已啟用</span>;
+  })()}
+  {user.is_admin && <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-full">管理員</span>}
+</div>
                       <p className="text-sm text-gray-600">{user.username} - {user.pi} Lab</p>
                     </div>
                     
