@@ -64,6 +64,11 @@ export default function NMRBookingSystem() {
   const [penaltyEnd, setPenaltyEnd] = useState('');
   const [violationHistory, setViolationHistory] = useState([]);
 
+// --- 新增自訂模板的 State ---
+  const [violationPresets, setViolationPresets] = useState([]);
+  const [newPresetReason, setNewPresetReason] = useState('');
+  const [newPresetDays, setNewPresetDays] = useState('');
+
   const INSTRUMENTS = ['60', '500'];
 
   // 生成時段
@@ -203,17 +208,18 @@ export default function NMRBookingSystem() {
     }
   }, [showHistoryPanel, selectedMonth, loadHistoryBookings]);
 
-  const loadSystemSettings = async () => {
+const loadSystemSettings = async () => {
     try {
       const { data, error } = await supabase
         .from('system_settings')
         .select('*')
         .eq('id', 1)
         .single();
-      
       if (data) {
         setSystemSettings(data);
         if (data.hourly_rate) setHourlyRate(data.hourly_rate);
+        // --- 新增這行：載入自訂模板 ---
+        if (data.violation_presets) setViolationPresets(data.violation_presets);
       } else {
         const defaultSettings = {
           rule1: '請提前預約所需時段，系統開放預約未來時段',
@@ -548,7 +554,7 @@ try {
     }
   };
 
-  const handleSaveSettings = async () => {
+ const handleSaveSettings = async () => {
     if (!systemSettings) return;
     try {
       const { data: existing } = await supabase.from('system_settings').select('id').eq('id', 1).single();
@@ -560,8 +566,11 @@ try {
         rule5: systemSettings.rule5,
         rule6: systemSettings.rule6,
         rule7: systemSettings.rule7,
-        hourly_rate: hourlyRate
+        hourly_rate: hourlyRate,
+        // --- 新增這行：儲存自訂模板 ---
+        violation_presets: violationPresets 
       };
+      // ... (保持原本的 if/else 儲存邏輯)
 
       if (existing) {
         const { error } = await supabase.from('system_settings').update(updateData).eq('id', 1);
@@ -1498,7 +1507,7 @@ if (showViolationModal && currentViolationUser) {
     );
   }
 
-  if (showSettingsPanel && currentUser?.is_admin) {
+if (showSettingsPanel && currentUser?.is_admin) {
     return (
       <div className="min-h-screen bg-gray-50">
         <div className="bg-white shadow-sm border-b">
@@ -1509,6 +1518,8 @@ if (showViolationModal && currentViolationUser) {
         </div>
         <div className="max-w-7xl mx-auto p-4">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            
+            {/* 左側：編輯使用規則 */}
             <div className="bg-white rounded-lg shadow-sm p-6">
               <h2 className="text-xl font-bold mb-2">編輯使用規則</h2>
               <p className="text-sm text-gray-600 mb-6">修改登入頁面右側顯示的使用規則文字</p>
@@ -1520,15 +1531,54 @@ if (showViolationModal && currentViolationUser) {
                       <textarea value={systemSettings[`rule${num}`]} onChange={(e) => setSystemSettings({ ...systemSettings, [`rule${num}`]: e.target.value })} rows={3} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 resize-y" placeholder={`輸入規則 ${num} 的內容...`}/>
                     </div>
                   ))}
-                  <button onClick={handleSaveSettings} className="w-full mt-6 px-4 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition font-medium">儲存設定</button>
+                  <button onClick={handleSaveSettings} className="w-full mt-6 px-4 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition font-medium shadow-lg shadow-indigo-200">儲存所有設定</button>
                 </div>
               )}
             </div>
-            <div className="lg:sticky lg:top-20 lg:self-start">
+
+            {/* 右側：預覽與自訂處罰模板 */}
+            <div className="space-y-6 lg:sticky lg:top-20 lg:self-start">
+              
+              {/* 自訂處罰模板區塊 */}
               <div className="bg-white rounded-lg shadow-sm p-6">
-                <h2 className="text-xl font-bold mb-2">即時預覽</h2>
-                <div className="bg-indigo-600 text-white p-6 rounded-lg max-h-[600px] overflow-y-auto">
-                  <h3 className="text-xl font-bold mb-4 sticky top-0 bg-indigo-600 pb-2">使用規則</h3>
+                <h2 className="text-xl font-bold mb-2">自訂處罰模板</h2>
+                <p className="text-sm text-gray-600 mb-4">設定違規視窗中的「快速套用按鈕」</p>
+                
+                {/* 新增模板輸入框 */}
+                <div className="flex gap-2 mb-4 bg-gray-50 p-3 rounded-lg border border-gray-200">
+                  <input type="text" value={newPresetReason} onChange={(e)=>setNewPresetReason(e.target.value)} placeholder="違規事項 (例: 遲到)" className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+                  <input type="number" value={newPresetDays} onChange={(e)=>setNewPresetDays(e.target.value)} placeholder="天數" min="1" className="w-20 px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+                  <button 
+                    onClick={() => {
+                      if(newPresetReason && newPresetDays) {
+                        setViolationPresets([...violationPresets, { reason: newPresetReason, days: parseInt(newPresetDays) }]);
+                        setNewPresetReason(''); setNewPresetDays('');
+                      }
+                    }} 
+                    className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 text-sm font-medium whitespace-nowrap">
+                    新增
+                  </button>
+                </div>
+
+                {/* 現有模板列表 */}
+                <div className="space-y-2">
+                  {violationPresets.map((preset, index) => (
+                    <div key={index} className="flex justify-between items-center px-3 py-2 bg-orange-50 text-orange-800 rounded-lg border border-orange-100">
+                      <span className="text-sm font-medium">{preset.reason} (停用 {preset.days} 天)</span>
+                      <button onClick={() => setViolationPresets(violationPresets.filter((_, i) => i !== index))} className="text-red-500 hover:text-red-700 p-1">
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
+                  {violationPresets.length === 0 && <p className="text-sm text-gray-500 text-center py-2">目前無自訂模板</p>}
+                </div>
+                <p className="text-xs text-red-500 mt-4 font-medium">* 編輯或新增模板後，請務必點擊左下方「儲存所有設定」按鈕寫入資料庫。</p>
+              </div>
+
+              {/* 規則預覽區塊 */}
+              <div className="bg-white rounded-lg shadow-sm p-6">
+                <h2 className="text-xl font-bold mb-2">登入頁規則預覽</h2>
+                <div className="bg-indigo-600 text-white p-6 rounded-lg max-h-[300px] overflow-y-auto">
                   <div className="space-y-3">
                     {systemSettings && [1, 2, 3, 4, 5, 6, 7].map(num => (
                       systemSettings[`rule${num}`] && (
@@ -1538,6 +1588,7 @@ if (showViolationModal && currentViolationUser) {
                   </div>
                 </div>
               </div>
+
             </div>
           </div>
         </div>
