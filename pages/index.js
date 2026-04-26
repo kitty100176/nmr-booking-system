@@ -1336,7 +1336,7 @@ if (showViolationModal && currentViolationUser) {
               </div>
             </div>
 
-           {/* 歷史紀錄列表 */}
+            {/* 歷史紀錄列表 */}
             <div>
               <label className="block text-sm font-bold text-gray-700 mb-2">📜 歷史懲罰紀錄</label>
               <div className="border border-gray-200 rounded-lg overflow-hidden bg-white">
@@ -1350,36 +1350,41 @@ if (showViolationModal && currentViolationUser) {
                             <span className="text-xs text-gray-400 ml-2">建立於: {new Date(record.saved_at).toLocaleDateString('zh-TW')}</span>
                           </div>
                           
-{/* [新增] 一鍵恢復按鈕 (自動更新時間至現在) */}
-                          <button 
-                            onClick={() => {
-                              setViolationReason(record.reason);
-                              setViolationText(record.note || '');
-                              
-                              // 計算這筆舊紀錄原本處罰了多久
-                              const oldStart = new Date(record.start);
-                              const oldEnd = new Date(record.end);
-                              const duration = oldEnd.getTime() - oldStart.getTime(); 
-                              
-                              // 將時間平移到「現在」開始
-                              const now = new Date();
-                              const newEnd = new Date(now.getTime() + duration);
-                              
-                              // 轉換為本地時間格式填入輸入框
-                              const toLocalISO = (date) => {
-                                const offset = date.getTimezoneOffset() * 60000;
-                                return new Date(date - offset).toISOString().slice(0, 16);
-                              };
+                          {/* 按鈕群組 */}
+                          <div className="flex gap-2">
+                            {/* 一鍵恢復按鈕 */}
+                            <button 
+                              onClick={() => {
+                                setViolationReason(record.reason);
+                                setViolationText(record.note || '');
+                                const oldStart = new Date(record.start);
+                                const oldEnd = new Date(record.end);
+                                const duration = oldEnd.getTime() - oldStart.getTime();
+                                const now = new Date();
+                                const newEnd = new Date(now.getTime() + duration);
+                                const toLocalISO = (date) => {
+                                  const offset = date.getTimezoneOffset() * 60000;
+                                  return new Date(date - offset).toISOString().slice(0, 16);
+                                };
+                                setPenaltyStart(toLocalISO(now));
+                                setPenaltyEnd(toLocalISO(newEnd));
+                                alert('✅ 已載入紀錄，請記得點擊下方「儲存並更新紀錄」！');
+                              }}
+                              className="px-2 py-1 bg-indigo-50 text-indigo-600 rounded hover:bg-indigo-100 text-xs font-bold transition flex items-center gap-1 shadow-sm"
+                            >
+                              🔄 恢復
+                            </button>
 
-                              setPenaltyStart(toLocalISO(now));
-                              setPenaltyEnd(toLocalISO(newEnd));
-                              
-                              alert('✅ 已為您載入舊紀錄！\n系統已自動將處罰時間設定為「從現在開始」。\n請確認無誤後點擊下方儲存！');
-                            }}
-                            className="px-2 py-1 bg-indigo-50 text-indigo-600 rounded hover:bg-indigo-100 text-xs font-bold transition flex items-center gap-1 shadow-sm"
-                          >
-                            🔄 恢復此紀錄
-                          </button>
+                            {/* [新增] 刪除按鈕 */}
+                            <button 
+                              onClick={() => handleDeleteViolationRecord(index)}
+                              className="px-2 py-1 bg-red-50 text-red-600 rounded hover:bg-red-100 text-xs font-bold transition flex items-center gap-1 shadow-sm"
+                              title="刪除此筆紀錄"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                              刪除
+                            </button>
+                          </div>
                         </div>
                         <p className="text-sm text-gray-600">期間：{record.start.replace('T', ' ')} ~ {record.end.replace('T', ' ')}</p>
                         {record.note && <p className="text-sm text-gray-500 mt-1 bg-gray-100 p-1.5 rounded">備註: {record.note}</p>}
@@ -1392,21 +1397,21 @@ if (showViolationModal && currentViolationUser) {
               </div>
             </div>
 
-</div> {/* 🔴 補回這個遺失的結尾標籤，關閉滾動視窗 */}
+          </div> {/* 🔴 關閉滾動視窗 */}
 
-              {/* 底部按鈕區 */}
-              <div className="flex gap-3 mt-4 pt-4 border-t flex-shrink-0">
-                <button onClick={handleClearPenalty} className="px-4 py-3 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition font-medium">解除 / 清空</button>
-                <button onClick={() => setShowViolationModal(false)} className="flex-1 px-4 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition font-medium">取消</button>
-                <button onClick={handleSaveViolation} className="flex-1 px-4 py-3 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition font-medium flex items-center justify-center gap-2 shadow-lg shadow-yellow-200">
-                  <Save className="w-4 h-4" />
-                  儲存並更新紀錄
-                </button>
-              </div>
-            </div>
+          {/* 底部按鈕區 */}
+          <div className="flex gap-3 mt-4 pt-4 border-t flex-shrink-0">
+            <button onClick={handleClearPenalty} className="px-4 py-3 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition font-medium">解除 / 清空</button>
+            <button onClick={() => setShowViolationModal(false)} className="flex-1 px-4 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition font-medium">取消</button>
+            <button onClick={handleSaveViolation} className="flex-1 px-4 py-3 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition font-medium flex items-center justify-center gap-2 shadow-lg shadow-yellow-200">
+              <Save className="w-4 h-4" />
+              儲存並更新紀錄
+            </button>
           </div>
-        );
-      }
+        </div>
+      </div>
+    );
+  }
 
   if (showBillingModal) {
     return <BillingModal />;
