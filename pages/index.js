@@ -720,7 +720,6 @@ try {
     setViolationText(user.violation_log || '');
     setViolationReason(user.violation_reason || '');
     
-    // 修正1：將資料庫的 UTC 時間轉為台灣本地時間給介面顯示
     const formatLocal = (dbDateStr) => {
       if (!dbDateStr) return '';
       const d = new Date(dbDateStr);
@@ -766,15 +765,13 @@ try {
     if (!currentViolationUser) return;
     try {
       let updatedHistory = [...(violationHistory || [])];
-      
-      // 修正2：將介面上的本地時間轉回標準時間存入資料庫，解決 8 小時時差
       const saveStart = penaltyStart ? new Date(penaltyStart).toISOString() : null;
       const saveEnd = penaltyEnd ? new Date(penaltyEnd).toISOString() : null;
       
       if (violationReason && penaltyStart && penaltyEnd) {
         const newRecord = {
           reason: violationReason,
-          start: penaltyStart, // 這裡保留本地時間字串給紀錄看
+          start: penaltyStart, 
           end: penaltyEnd,
           note: violationText,
           saved_at: new Date().toISOString()
@@ -804,6 +801,32 @@ try {
     } catch (error) {
       console.error('儲存違規事項失敗:', error);
       alert('儲存失敗，請稍後再試');
+    }
+  };
+
+  // [新增] 刪除歷史違規紀錄
+  const handleDeleteViolationRecord = async (indexToDelete) => {
+    if (!currentViolationUser) return;
+    
+    const confirmed = window.confirm('確定要永久刪除這筆歷史紀錄嗎？');
+    if (!confirmed) return;
+
+    try {
+      const updatedHistory = violationHistory.filter((_, index) => index !== indexToDelete);
+
+      const { error } = await supabase
+        .from('users')
+        .update({ violation_history: updatedHistory })
+        .eq('id', currentViolationUser.id);
+
+      if (error) throw error;
+
+      setViolationHistory(updatedHistory);
+      alert('✅ 歷史紀錄已成功刪除');
+      await loadUsers();
+    } catch (error) {
+      console.error('刪除歷史紀錄失敗:', error);
+      alert('刪除失敗，請檢查網路狀態');
     }
   };
 
@@ -1368,18 +1391,18 @@ if (showViolationModal && currentViolationUser) {
                                 };
                                 setPenaltyStart(toLocalISO(now));
                                 setPenaltyEnd(toLocalISO(newEnd));
-                                alert('✅ 已載入紀錄，請記得點擊下方「儲存並更新紀錄」！');
+                                alert('✅ 已為您載入舊紀錄！\n系統已自動將處罰時間設定為「從現在開始」。\n請確認無誤後點擊下方儲存！');
                               }}
                               className="px-2 py-1 bg-indigo-50 text-indigo-600 rounded hover:bg-indigo-100 text-xs font-bold transition flex items-center gap-1 shadow-sm"
                             >
                               🔄 恢復
                             </button>
 
-                            {/* [新增] 刪除按鈕 */}
+                            {/* 刪除按鈕 */}
                             <button 
                               onClick={() => handleDeleteViolationRecord(index)}
                               className="px-2 py-1 bg-red-50 text-red-600 rounded hover:bg-red-100 text-xs font-bold transition flex items-center gap-1 shadow-sm"
-                              title="刪除此筆紀錄"
+                              title="永久刪除此筆紀錄"
                             >
                               <Trash2 className="w-3 h-3" />
                               刪除
@@ -1397,7 +1420,7 @@ if (showViolationModal && currentViolationUser) {
               </div>
             </div>
 
-          </div> {/* 🔴 關閉滾動視窗 */}
+          </div>
 
           {/* 底部按鈕區 */}
           <div className="flex gap-3 mt-4 pt-4 border-t flex-shrink-0">
