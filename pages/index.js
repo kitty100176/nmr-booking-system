@@ -1392,19 +1392,21 @@ if (showViolationModal && currentViolationUser) {
               </div>
             </div>
 
-          {/* 底部按鈕區 */}
-          <div className="flex gap-3 mt-4 pt-4 border-t flex-shrink-0">
-            <button onClick={handleClearPenalty} className="px-4 py-3 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition font-medium">解除 / 清空</button>
-            <button onClick={() => setShowViolationModal(false)} className="flex-1 px-4 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition font-medium">取消</button>
-            <button onClick={handleSaveViolation} className="flex-1 px-4 py-3 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition font-medium flex items-center justify-center gap-2 shadow-lg shadow-yellow-200">
-              <Save className="w-4 h-4" />
-              儲存並更新紀錄
-            </button>
+</div> {/* 🔴 補回這個遺失的結尾標籤，關閉滾動視窗 */}
+
+              {/* 底部按鈕區 */}
+              <div className="flex gap-3 mt-4 pt-4 border-t flex-shrink-0">
+                <button onClick={handleClearPenalty} className="px-4 py-3 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition font-medium">解除 / 清空</button>
+                <button onClick={() => setShowViolationModal(false)} className="flex-1 px-4 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition font-medium">取消</button>
+                <button onClick={handleSaveViolation} className="flex-1 px-4 py-3 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition font-medium flex items-center justify-center gap-2 shadow-lg shadow-yellow-200">
+                  <Save className="w-4 h-4" />
+                  儲存並更新紀錄
+                </button>
+              </div>
+            </div>
           </div>
-        </div>
-      </div>
-    );
-  }
+        );
+      }
 
   if (showBillingModal) {
     return <BillingModal />;
