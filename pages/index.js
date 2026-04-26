@@ -1336,7 +1336,7 @@ if (showViolationModal && currentViolationUser) {
               </div>
             </div>
 
-            {/* 歷史紀錄列表 */}
+           {/* 歷史紀錄列表 */}
             <div>
               <label className="block text-sm font-bold text-gray-700 mb-2">📜 歷史懲罰紀錄</label>
               <div className="border border-gray-200 rounded-lg overflow-hidden bg-white">
@@ -1345,8 +1345,41 @@ if (showViolationModal && currentViolationUser) {
                     {violationHistory.map((record, index) => (
                       <li key={index} className="p-3 hover:bg-gray-50 transition">
                         <div className="flex justify-between items-start mb-1">
-                          <span className="font-medium text-red-600">{record.reason}</span>
-                          <span className="text-xs text-gray-400">建立於: {new Date(record.saved_at).toLocaleDateString('zh-TW')}</span>
+                          <div>
+                            <span className="font-medium text-red-600">{record.reason}</span>
+                            <span className="text-xs text-gray-400 ml-2">建立於: {new Date(record.saved_at).toLocaleDateString('zh-TW')}</span>
+                          </div>
+                          
+{/* [新增] 一鍵恢復按鈕 (自動更新時間至現在) */}
+                          <button 
+                            onClick={() => {
+                              setViolationReason(record.reason);
+                              setViolationText(record.note || '');
+                              
+                              // 計算這筆舊紀錄原本處罰了多久
+                              const oldStart = new Date(record.start);
+                              const oldEnd = new Date(record.end);
+                              const duration = oldEnd.getTime() - oldStart.getTime(); 
+                              
+                              // 將時間平移到「現在」開始
+                              const now = new Date();
+                              const newEnd = new Date(now.getTime() + duration);
+                              
+                              // 轉換為本地時間格式填入輸入框
+                              const toLocalISO = (date) => {
+                                const offset = date.getTimezoneOffset() * 60000;
+                                return new Date(date - offset).toISOString().slice(0, 16);
+                              };
+
+                              setPenaltyStart(toLocalISO(now));
+                              setPenaltyEnd(toLocalISO(newEnd));
+                              
+                              alert('✅ 已為您載入舊紀錄！\n系統已自動將處罰時間設定為「從現在開始」。\n請確認無誤後點擊下方儲存！');
+                            }}
+                            className="px-2 py-1 bg-indigo-50 text-indigo-600 rounded hover:bg-indigo-100 text-xs font-bold transition flex items-center gap-1 shadow-sm"
+                          >
+                            🔄 恢復此紀錄
+                          </button>
                         </div>
                         <p className="text-sm text-gray-600">期間：{record.start.replace('T', ' ')} ~ {record.end.replace('T', ' ')}</p>
                         {record.note && <p className="text-sm text-gray-500 mt-1 bg-gray-100 p-1.5 rounded">備註: {record.note}</p>}
@@ -1358,7 +1391,6 @@ if (showViolationModal && currentViolationUser) {
                 )}
               </div>
             </div>
-          </div>
 
           {/* 底部按鈕區 */}
           <div className="flex gap-3 mt-4 pt-4 border-t flex-shrink-0">
